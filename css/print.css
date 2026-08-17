@@ -1,0 +1,86 @@
+/* print.css — stampa pulita e compatta della scheda esercizio.
+   Obiettivo: tutto su una pagina quando possibile, niente pagine quasi vuote.
+   Le sezioni deselezionate nel configuratore ricevono display:none via JS. */
+
+@media print {
+  /* cromatura UI fuori dalla scheda */
+  .topbar, .app-nav, .view-head, .no-print, .toast-stack,
+  .head-actions, .btn, .link-btn, .se-toolbar, .se-palette, .form-actionbar,
+  .print-modal-overlay { display: none !important; }
+
+  html, body { background: #fff !important; }
+  .app-main { max-width: none; padding: 0; margin: 0; }
+
+  .view-detail .sheet {
+    border: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important;
+    font-size: 10.5pt;
+  }
+  .sheet-head { border-bottom: 2px solid #000 !important; padding-bottom: 8pt !important; margin-bottom: 10pt !important; }
+  .sheet-title { font-size: 17pt; }
+
+  /* categorie: in stampa niente badge, testo inline compatto */
+  .block-screen { display: none !important; }
+  .print-only { display: block !important; }
+  .cat-inline { margin: 0 0 5pt; font-size: 10pt; line-height: 1.4; }
+  .cat-inline strong { font-weight: 700; }
+
+  /* spaziatura compatta dei blocchi */
+  .block { margin: 0 0 7pt !important; }
+  .block h4 { margin-bottom: 4pt !important; font-size: 8.5pt !important; }
+  .sheet-side { gap: 7pt !important; }
+
+  /* griglia: schema a sinistra, dettagli a destra */
+  .sheet-grid { grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 7pt; }
+
+  /* (a) SVG: nessun min-height/margine fisso, occupa solo lo spazio utile */
+  .sheet-svg { background: #fff !important; border: 1px solid #ccc; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .sheet-svg svg { max-height: 45vh !important; width: 100% !important; height: auto !important; object-fit: contain; display: block; }
+  .se-canvas { max-height: 45vh !important; }
+  .ex-noimg { min-height: 0 !important; padding: 8pt !important; }
+  .ex-noimg-art { width: 40% !important; }
+
+  /* stat / liste in scala di grigio */
+  .stat { background: #f7f7f7 !important; border: 1px solid #ddd !important; padding: 8px 10px !important; }
+  .stat-hero { background: #f2f2f2 !important; border: 1px solid #bbb !important; }
+  .stat-value, .stat-hero .stat-value { color: #000 !important; font-size: 15px !important; }
+  .param-grid { gap: 8px !important; }
+  /* (1) Materiali in stampa: niente simboli SVG (spesso invisibili su carta),
+     solo badge compatti "Nome × N". */
+  .mat-list .mat-ico-sm { display: none !important; }
+  .mat-list li { background: #f7f7f7 !important; border: 1px solid #ddd !important; padding: 4px 10px !important; gap: 6px !important; font-size: 12px !important; }
+  .mat-list .qty { margin-left: 6px !important; background: #eee !important; color: #000 !important; padding: 1px 8px !important; }
+  .chip { border: 1px solid #bbb !important; background: #f4f4f4 !important; color: #000 !important; }
+  .chip-out { background: #fff !important; border: 1px dashed #999 !important; }
+  .badge { border: 1px solid #999 !important; background: #fff !important; color: #000 !important; }
+  .sheet-imgs img { max-width: 32% !important; }
+
+  /* (d) link: etichetta + URL come testo (su carta il click è inutile) */
+  .link-list a { text-decoration: none !important; color: #000 !important; }
+  .link-list a::after { content: " — " attr(href); font-weight: 400; color: #333; word-break: break-all; }
+
+  /* (c) interruzioni di pagina: blocchi mai spezzati, mai isolati su pagina nuova */
+  .sheet-svg, .block, .param-grid, .mat-list, .stat, .sheet-imgs img {
+    break-inside: avoid !important; page-break-inside: avoid !important;
+  }
+  .sheet .block, .sheet-grid { page-break-before: avoid !important; }
+
+  a { color: #000 !important; }
+  @page { margin: 13mm; }
+}
+
+/* Fallback con classe .printing (in caso di stampa programmata) */
+body.printing .topbar,
+body.printing .app-nav,
+body.printing .view-head,
+body.printing .no-print,
+body.printing .print-modal-overlay,
+body.printing .toast-stack { display: none !important; }
+
+/* ============================================================
+   Report portiere — riusa la pipeline print già esistente (window.print).
+   Il grafico è SVG nativo: si stampa correttamente senza conversioni canvas→immagine.
+   ============================================================ */
+@media print {
+  .rpt-header, .rpt-block { break-inside: avoid; page-break-inside: avoid; }
+  .rpt-chart-svg { max-width: 100%; }
+}
