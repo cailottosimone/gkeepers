@@ -8,7 +8,7 @@ import { SvgEditor, parseEditorSvg, composeExerciseSvg } from "./svgEditor.js";
 import { SettingsPanel } from "./settings.js";
 import { TagPicker } from "./tagPicker.js";
 import { MaterialQtyPicker, materialQtyMatches } from "./materialFilter.js";
-import { placeSymbol, PREFERRED_FOOT_LABELS } from "./defaults.js";
+import { placeSymbol, PREFERRED_FOOT_LABELS, HEALTH_STATUS_ORDER, HEALTH_STATUS_LABELS } from "./defaults.js";
 import { aggregateSession, formatDuration, estimateExerciseDuration } from "./session.js";
 import { DAY_LABELS, DAY_LABELS_SHORT, MONTH_LABELS, MONTH_LABELS_SHORT, EVENT_TYPE_LABELS, DAY_TYPES, DAY_TYPE_LABELS, parseDateISO, toISODate, addDays, mondayOf, isoWeekday, dayDate, dayItemCount, generateWeekStartDates, ensureWeekShape, syncWeekFlats, buildWeekFromTemplate, regenerateWeeks, countPlannedWeeks } from "./seasonLogic.js";
 import { exportToJsonString, parseImport, triggerDownload, readFileAsText, resizeImageFile, migrateExerciseToCurrent, migrateSessionToCurrent, buildSingleExerciseExport, buildConfigExport, parseSingleExerciseImport, parseConfigImport, buildProfileExport, parseProfileImport, buildSingleGoalkeeperExport, parseSingleGoalkeeperImport, normalizeGoalkeeper, buildSingleSeasonExport, parseSingleSeasonImport, buildSingleEventExport, parseSingleEventImport, normalizeSeason, normalizeEvent, buildSingleGenericEventExport, parseSingleGenericEventImport, buildSingleSpecificEventExport, parseSingleSpecificEventImport, normalizeGenericEvent, normalizeSpecificEvent } from "./importExport.js";
@@ -149,7 +149,11 @@ export class UI {
     this.genericEvents = await storage.getAllGenericEvents();
     this.specificEvents = await storage.getAllSpecificEvents();
     const freshProfile = await storage.getProfile();
-    if (freshProfile) { this.profile = freshProfile; this._refreshLogoBadge(); }
+    if (freshProfile) {
+      if (freshProfile.appMode !== "semplice" && freshProfile.appMode !== "completa") freshProfile.appMode = "semplice";
+      this.profile = freshProfile;
+      this._refreshLogoBadge();
+    }
   }
 
   // Carica il profilo locale; al primo avvio dopo l'aggiornamento lo crea vuoto (senza blocco).
@@ -161,11 +165,15 @@ export class UI {
         type: "profile", id: genId(), createdAt: now, updatedAt: now,
         firstName: "", lastName: "", role: null, clubs: [], logo: null,
         contactEmail: null, contactPhone: null,
-        appLock: { enabled: false, pinHash: null, lockOnStart: false }
+        appLock: { enabled: false, pinHash: null, lockOnStart: false },
+        appMode: "semplice"
       };
       await storage.saveProfile(p);
     }
     if (!p.appLock || typeof p.appLock !== "object") p.appLock = { enabled: false, pinHash: null, lockOnStart: false };
+    // Fallback difensivo (schema pre-esistente / valore corrotto): la modalità semplificata
+    // è il default per i profili creati prima di questo campo.
+    if (p.appMode !== "semplice" && p.appMode !== "completa") p.appMode = "semplice";
     this.profile = p;
   }
 
@@ -229,7 +237,8 @@ export class UI {
   // ---------- Shell / navigazione (barra orizzontale superiore) ----------
   _navItems() {
     // Nota: "Profilo" NON è una voce di menu: si accede dal chip profilo nella barra.
-    return [
+    const isSimple = !this.profile || this.profile.appMode !== "completa";
+    const full = [
       ["esercizi", "Esercizi", NAV_ICONS.esercizi],
       ["sedute", "Sedute", NAV_ICONS.sedute],
       ["portieri", "Portieri", NAV_ICONS.portieri],
@@ -238,6 +247,14 @@ export class UI {
       ["report", "Report", NAV_ICONS.report],
       ["impostazioni", "Impostazioni", NAV_ICONS.impostazioni]
     ];
+    // In modalità semplice le sezioni avanzate restano nel codice ma escono dalla nav:
+    // riattivabili in qualsiasi momento passando a "completa" in Impostazioni, senza
+    // perdita di dati (nessun record viene toccato da questo filtro).
+    return isSimple ? full.filter(([r]) => r !== "presenze" && r !== "report") : full;
+  }
+  _isModuleHiddenInCurrentMode(route) {
+    const isSimple = !this.profile || this.profile.appMode !== "completa";
+    return isSimple && (route === "presenze" || route === "report");
   }
   // Iniziali per l'avatar (es. "Simone Cailotto" -> "SC").
   _accountInitials(p) {
@@ -356,6 +373,9 @@ export class UI {
   }
 
   setRoute(route, param) {
+    // Guardia modalità: Presenze/Report restano nel codice ma non sono raggiungibili in
+    // modalità semplice (link salvati, deep-link, tasti Indietro del browser...).
+    if (this._isModuleHiddenInCurrentMode(route)) route = "esercizi";
     this.route = route;
     // Le viste editor/dettaglio appartengono alla sezione "esercizi"; le gk-* a "portieri".
     const navOf = (route === "editor" || route === "dettaglio") ? "esercizi"
@@ -677,6 +697,7 @@ export class UI {
     const portiereQty = mats.get("portiere") || 0;
     const palloneQty = mats.get("pallone") || 0;
     const dur = formatDuration(ex.parameters?.estimatedTotalSeconds || 0);   // MM:SS compatto
+    const showDuration = this.profile && this.profile.appMode === "completa";
 
     const tagRow = (label, arr) => {
       if (!arr || !arr.length) return "";
@@ -707,7 +728,7 @@ export class UI {
         <div class="ex-card-foot">
           <div class="ex-stat"><span class="ex-stat-top"><b class="ex-stat-num">${portiereQty}</b></span><span class="ex-stat-lbl">portieri</span></div>
           ${palloneQty > 0 ? `<div class="ex-stat"><span class="ex-stat-top"><b class="ex-stat-num">${palloneQty}</b></span><span class="ex-stat-lbl">palloni</span></div>` : ""}
-          <div class="ex-stat"><span class="ex-stat-top"><span class="ex-foot-ico ex-foot-clock">${ICO_CLOCK}</span><b class="ex-stat-num">${dur}</b></span><span class="ex-stat-lbl">durata</span></div>
+          ${showDuration ? `<div class="ex-stat"><span class="ex-stat-top"><span class="ex-foot-ico ex-foot-clock">${ICO_CLOCK}</span><b class="ex-stat-num">${dur}</b></span><span class="ex-stat-lbl">durata</span></div>` : ""}
         </div>
       </article>`;
   }
@@ -806,6 +827,10 @@ export class UI {
 
     const p = editing?.parameters || { series: 3, reps: 8, workSeconds: 20, recoverySeconds: 40, timeMode: "per_series", estimatedTotalSeconds: 0 };
     const timeMode = p.timeMode === "per_rep" ? "per_rep" : "per_series";   // default retrocompatibile
+    // Schema 2.4: in modalità semplice la struttura serie/ripetizioni/tempi è del tutto
+    // nascosta dal form. I dati esistenti NON vengono toccati (vedi _saveExercise): se
+    // l'esercizio era stato creato in modalità completa, i suoi tempi restano intatti.
+    const isSimpleMode = !this.profile || this.profile.appMode !== "completa";
 
     this.main.innerHTML = `
       <section class="view view-editor">
@@ -882,6 +907,7 @@ export class UI {
           <div class="mat-chosen" id="mat-chosen"></div>
         </div>
 
+        ${isSimpleMode ? "" : `
         <div class="field">
           <span class="field-label">Struttura dell'esercizio</span>
           <div class="timemode">
@@ -896,7 +922,7 @@ export class UI {
             <label>Recupero (s)<input type="number" id="p-rec" class="input" min="0" value="${p.recoverySeconds}"></label>
           </div>
           <p class="dur-preview" id="p-preview"></p>
-        </div>
+        </div>`}
 
         <div class="field">
           <span class="field-label">Stato</span>
@@ -1041,24 +1067,27 @@ export class UI {
     });
 
     // anteprima durata in tempo reale + selettore tempo (per serie / per ripetizione)
-    const readParams = () => ({
-      series: this.main.querySelector("#p-series").value,
-      reps: this.main.querySelector("#p-reps").value,
-      workSeconds: this.main.querySelector("#p-work").value,
-      recoverySeconds: this.main.querySelector("#p-rec").value,
-      timeMode: (this.main.querySelector('input[name="timemode"]:checked') || {}).value || "per_series"
-    });
-    const refreshPreview = () => {
-      const prm = readParams();
-      const lbl = this.main.querySelector("#p-work-label");
-      if (lbl) lbl.childNodes[0].nodeValue = prm.timeMode === "per_rep" ? "Tempo per ripetizione (s)" : "Tempo di lavoro per serie (s)";
-      const pv = this.main.querySelector("#p-preview");
-      if (pv) pv.textContent = this._formDurPreview(prm);
-    };
-    ["#p-series", "#p-reps", "#p-work", "#p-rec"].forEach(sel =>
-      this.main.querySelector(sel).addEventListener("input", refreshPreview));
-    this.main.querySelectorAll('input[name="timemode"]').forEach(r => r.addEventListener("change", refreshPreview));
-    refreshPreview();
+    // — presente solo in modalità completa (in modalità semplice il blocco non è nel DOM).
+    if (!isSimpleMode) {
+      const readParams = () => ({
+        series: this.main.querySelector("#p-series").value,
+        reps: this.main.querySelector("#p-reps").value,
+        workSeconds: this.main.querySelector("#p-work").value,
+        recoverySeconds: this.main.querySelector("#p-rec").value,
+        timeMode: (this.main.querySelector('input[name="timemode"]:checked') || {}).value || "per_series"
+      });
+      const refreshPreview = () => {
+        const prm = readParams();
+        const lbl = this.main.querySelector("#p-work-label");
+        if (lbl) lbl.childNodes[0].nodeValue = prm.timeMode === "per_rep" ? "Tempo per ripetizione (s)" : "Tempo di lavoro per serie (s)";
+        const pv = this.main.querySelector("#p-preview");
+        if (pv) pv.textContent = this._formDurPreview(prm);
+      };
+      ["#p-series", "#p-reps", "#p-work", "#p-rec"].forEach(sel =>
+        this.main.querySelector(sel).addEventListener("input", refreshPreview));
+      this.main.querySelectorAll('input[name="timemode"]').forEach(r => r.addEventListener("change", refreshPreview));
+      refreshPreview();
+    }
   }
 
   _renderAttachments() {
@@ -1116,12 +1145,22 @@ export class UI {
     const now = new Date().toISOString();
     const existing = this.editingId ? this.exercises.find(x => x.id === this.editingId) : null;
 
-    const series = int(this.main.querySelector("#p-series").value);
-    const reps = int(this.main.querySelector("#p-reps").value);
-    const workSeconds = int(this.main.querySelector("#p-work").value);
-    const recoverySeconds = int(this.main.querySelector("#p-rec").value);
-    const timeMode = (this.main.querySelector('input[name="timemode"]:checked') || {}).value === "per_rep" ? "per_rep" : "per_series";
-    const estimatedTotalSeconds = this._calcDuration({ series, reps, workSeconds, recoverySeconds, timeMode });
+    // In modalità semplice il blocco tempi non è nel form: i parametri esistenti (se
+    // l'esercizio era stato creato/modificato in modalità completa) restano intatti;
+    // per un esercizio nuovo restano a zero. Non si azzera mai un dato già presente.
+    const pEl = this.main.querySelector("#p-series");
+    let series, reps, workSeconds, recoverySeconds, timeMode, estimatedTotalSeconds;
+    if (pEl) {
+      series = int(this.main.querySelector("#p-series").value);
+      reps = int(this.main.querySelector("#p-reps").value);
+      workSeconds = int(this.main.querySelector("#p-work").value);
+      recoverySeconds = int(this.main.querySelector("#p-rec").value);
+      timeMode = (this.main.querySelector('input[name="timemode"]:checked') || {}).value === "per_rep" ? "per_rep" : "per_series";
+      estimatedTotalSeconds = this._calcDuration({ series, reps, workSeconds, recoverySeconds, timeMode });
+    } else {
+      const prevP = existing?.parameters || { series: 0, reps: 0, workSeconds: 0, recoverySeconds: 0, timeMode: "per_series", estimatedTotalSeconds: 0 };
+      ({ series, reps, workSeconds, recoverySeconds, timeMode, estimatedTotalSeconds } = prevP);
+    }
 
     const links = this.formState.links
       .filter(l => (l.url || "").trim())
@@ -1554,6 +1593,7 @@ export class UI {
 
   _paramsBlock(p) {
     if (!p) return "";
+    if (!this.profile || this.profile.appMode !== "completa") return "";   // schema 2.4: tempi nascosti in modalità semplice
     return `<div class="block" data-print-section="params"><h4>Struttura dell'esercizio</h4>
       <div class="param-grid">
         <div class="stat"><span class="stat-label">Serie</span><span class="stat-value">${p.series}</span></div>
@@ -1810,11 +1850,58 @@ export class UI {
       .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   }
 
+  // Composer sedute (schema 2.4): la seduta è una sequenza di BLOCCHI liberi (titolo + note),
+  // ognuno con esercizi opzionali agganciati dal catalogo. Un solo blocco alla volta è "attivo"
+  // per l'aggiunta di esercizi (selettore con filtri riusato identico a prima, ora scoped al
+  // blocco attivo invece che alla seduta intera). exerciseIds/aggregated in cima alla seduta
+  // restano una cache piatta derivata dai blocchi, per non dover toccare Report/Presenze/scheda
+  // portiere che li leggono così come sono.
+  _resetComposer() {
+    const b = { id: genId(), title: "", notes: "", exerciseIds: [] };
+    this.composer = { id: null, title: "", blocks: [b], activeBlockId: b.id, goalkeeperIds: [] };
+  }
+
+  _activeComposerBlock() {
+    if (!this.composer || !Array.isArray(this.composer.blocks) || !this.composer.blocks.length) return null;
+    let b = this.composer.blocks.find(x => x.id === this.composer.activeBlockId);
+    if (!b) { b = this.composer.blocks[0]; this.composer.activeBlockId = b.id; }
+    return b;
+  }
+
+  _blockLabel(b) { return (b && b.title && b.title.trim()) || "Blocco senza titolo"; }
+
+  _blockChipsHtml(b) {
+    return (b.exerciseIds || []).map(id => {
+      const ex = this.exercises.find(x => x.id === id);
+      return `<span class="block-chip">${escapeHtml(ex ? ex.title : "(esercizio rimosso)")}<button type="button" class="block-chip-del" data-blkid="${escapeAttr(b.id)}" data-exid="${escapeAttr(id)}" title="Rimuovi">✕</button></span>`;
+    }).join("") || `<span class="muted small">Nessun esercizio collegato.</span>`;
+  }
+
+  _blocksHtml() {
+    return this.composer.blocks.map((b, i) => {
+      const isActive = b.id === this.composer.activeBlockId;
+      return `<div class="sess-block card-soft ${isActive ? "is-active" : ""}" data-blockid="${escapeAttr(b.id)}">
+        <div class="sess-block-head">
+          <input type="text" class="input block-title" data-blkid="${escapeAttr(b.id)}" placeholder="Es. Riscaldamento, Parte tecnica, Partitella…" value="${escapeAttr(b.title)}">
+          <div class="sess-block-tools">
+            <button type="button" class="icon-btn" data-blkup="${escapeAttr(b.id)}" title="Sposta su" ${i === 0 ? "disabled" : ""}>↑</button>
+            <button type="button" class="icon-btn" data-blkdown="${escapeAttr(b.id)}" title="Sposta giù" ${i === this.composer.blocks.length - 1 ? "disabled" : ""}>↓</button>
+            <button type="button" class="icon-btn danger" data-blkdel="${escapeAttr(b.id)}" title="Elimina blocco" ${this.composer.blocks.length <= 1 ? "disabled" : ""}>${ICO_DEL}</button>
+          </div>
+        </div>
+        <textarea class="input block-notes" data-blkid="${escapeAttr(b.id)}" rows="2" placeholder="Note libere per questo blocco (facoltative)…">${escapeHtml(b.notes)}</textarea>
+        <div class="block-chips">${this._blockChipsHtml(b)}</div>
+        <button type="button" class="link-btn ${isActive ? "is-active-hint" : ""}" data-blkactivate="${escapeAttr(b.id)}">${isActive ? "✓ Blocco attivo per aggiungere esercizi" : "Aggiungi esercizi qui →"}</button>
+      </div>`;
+    }).join("");
+  }
+
   renderSedute() {
     this._destroyPickers();
-    if (!this.composer) this.composer = { id: null, title: "", ids: [], goalkeeperIds: [] };
+    if (!this.composer || !Array.isArray(this.composer.blocks) || !this.composer.blocks.length) this._resetComposer();
     if (!Array.isArray(this.composer.goalkeeperIds)) this.composer.goalkeeperIds = [];
     const sList = this._filteredSessions();
+    const activeBlock = this._activeComposerBlock();
     this.main.innerHTML = `
       <section class="view">
         <div class="view-head">
@@ -1828,34 +1915,46 @@ export class UI {
               <span class="field-label">Titolo seduta</span>
               <input type="text" id="s-title" class="input" placeholder="Es. Seduta 1 — reattività e tuffo" value="${escapeAttr(this.composer.title)}">
             </label>
-            <span class="field-label">Esercizi nella seduta (<span id="pick-chosen-count">${this.composer.ids.length}</span>)</span>
-            <div class="pick-list pick-list-chosen" id="pick-chosen"></div>
 
-            <div class="filters card-soft filters-compact" id="composer-filters">
-              <input type="search" id="cf-search" class="input" placeholder="Cerca esercizio…" value="${escapeAttr(this.composerFilter.q)}">
-              <div class="filters-pickers">
-                <div class="filter-field"><span class="field-label">Gesti</span><div id="cfp-gestures"></div>${this._logicRowHtml("gestures")}</div>
-                <div class="filter-field"><span class="field-label">Qualità</span><div id="cfp-qualities"></div>${this._logicRowHtml("qualities")}</div>
-                <div class="filter-field"><span class="field-label">Periodo</span><div id="cfp-periods"></div>${this._logicRowHtml("periods")}</div>
-                <div class="filter-field"><span class="field-label">Materiali</span><div id="cfp-materials"></div>${this._logicRowHtml("materials")}</div>
-              </div>
-              <div class="filters-foot">
-                <div class="seg filter-status">
-                  <button type="button" class="seg-btn ${this.composerFilter.status.has('favorite') ? 'is-on' : ''}" data-cfstatus="favorite">Preferiti</button>
-                  <button type="button" class="seg-btn ${this.composerFilter.status.has('memory') ? 'is-on' : ''}" data-cfstatus="memory">In memoria</button>
+            <span class="field-label">Blocchi della seduta</span>
+            <p class="muted small">Ogni blocco è un pezzo libero della seduta (titolo + note); collegare esercizi dal catalogo è facoltativo.</p>
+            <div class="sess-blocks" id="sess-blocks">${this._blocksHtml()}</div>
+            <button type="button" class="btn btn-soft" id="s-add-block">＋ Aggiungi blocco</button>
+
+            <div class="composer-picker">
+              <span class="field-label">Esercizi nel blocco attivo: <b id="active-block-label">${escapeHtml(this._blockLabel(activeBlock))}</b> (<span id="pick-chosen-count">${(activeBlock?.exerciseIds || []).length}</span>)</span>
+              <div class="pick-list pick-list-chosen" id="pick-chosen"></div>
+
+              <div class="filters card-soft filters-compact" id="composer-filters">
+                <input type="search" id="cf-search" class="input" placeholder="Cerca esercizio…" value="${escapeAttr(this.composerFilter.q)}">
+                <div class="filters-pickers">
+                  <div class="filter-field"><span class="field-label">Gesti</span><div id="cfp-gestures"></div>${this._logicRowHtml("gestures")}</div>
+                  <div class="filter-field"><span class="field-label">Qualità</span><div id="cfp-qualities"></div>${this._logicRowHtml("qualities")}</div>
+                  <div class="filter-field"><span class="field-label">Periodo</span><div id="cfp-periods"></div>${this._logicRowHtml("periods")}</div>
+                  <div class="filter-field"><span class="field-label">Materiali</span><div id="cfp-materials"></div>${this._logicRowHtml("materials")}</div>
                 </div>
-                <div class="filters-foot-right">
-                  <span class="filters-count" id="cf-count"></span>
-                  <button type="button" class="link-btn" id="cf-clear">Cancella filtri</button>
+                <div class="filters-foot">
+                  <div class="seg filter-status">
+                    <button type="button" class="seg-btn ${this.composerFilter.status.has('favorite') ? 'is-on' : ''}" data-cfstatus="favorite">Preferiti</button>
+                    <button type="button" class="seg-btn ${this.composerFilter.status.has('memory') ? 'is-on' : ''}" data-cfstatus="memory">In memoria</button>
+                  </div>
+                  <div class="filters-foot-right">
+                    <span class="filters-count" id="cf-count"></span>
+                    <button type="button" class="link-btn" id="cf-clear">Cancella filtri</button>
+                  </div>
                 </div>
               </div>
+
+              <span class="field-label">Esercizi disponibili</span>
+              <div class="pick-list" id="pick-available"></div>
             </div>
 
-            <span class="field-label">Esercizi disponibili</span>
-            <div class="pick-list" id="pick-available"></div>
-            <div class="composer-actions">
-              <button type="button" class="btn" id="s-reset">Azzera</button>
-              <button type="button" class="btn btn-primary" id="s-save">${this.composer.id ? "Aggiorna seduta" : "Salva seduta"}</button>
+            <div class="form-actionbar">
+              <span class="form-actionbar-label">${this.composer.id ? "Modifica seduta" : "Nuova seduta"}</span>
+              <div class="form-actionbar-btns">
+                <button type="button" class="btn" id="s-reset">Azzera</button>
+                <button type="button" class="btn btn-primary" id="s-save">${this.composer.id ? "Aggiorna seduta" : "Salva seduta"}</button>
+              </div>
             </div>
           </div>
 
@@ -1892,14 +1991,61 @@ export class UI {
       </section>
     `;
     this.main.querySelector("#s-title").addEventListener("input", (e) => { this.composer.title = e.target.value; });
+
+    // --- blocchi: titolo/note aggiornano lo stato senza ri-render; struttura/attivazione ri-renderizzano ---
+    const blocksWrap = this.main.querySelector("#sess-blocks");
+    blocksWrap.querySelectorAll(".block-title").forEach(inp => inp.addEventListener("input", () => {
+      const b = this.composer.blocks.find(x => x.id === inp.dataset.blkid);
+      if (!b) return;
+      b.title = inp.value;
+      if (this.composer.activeBlockId === b.id) {
+        const lbl = this.main.querySelector("#active-block-label");
+        if (lbl) lbl.textContent = this._blockLabel(b);
+      }
+    }));
+    blocksWrap.querySelectorAll(".block-notes").forEach(ta => ta.addEventListener("input", () => {
+      const b = this.composer.blocks.find(x => x.id === ta.dataset.blkid);
+      if (b) b.notes = ta.value;
+    }));
+    blocksWrap.querySelectorAll("[data-blkactivate]").forEach(btn => btn.addEventListener("click", () => {
+      this.composer.activeBlockId = btn.dataset.blkactivate;
+      this.renderSedute();
+    }));
+    blocksWrap.querySelectorAll("[data-blkup]").forEach(btn => btn.addEventListener("click", () => {
+      const idx = this.composer.blocks.findIndex(x => x.id === btn.dataset.blkup);
+      if (idx > 0) { const [b] = this.composer.blocks.splice(idx, 1); this.composer.blocks.splice(idx - 1, 0, b); this.renderSedute(); }
+    }));
+    blocksWrap.querySelectorAll("[data-blkdown]").forEach(btn => btn.addEventListener("click", () => {
+      const idx = this.composer.blocks.findIndex(x => x.id === btn.dataset.blkdown);
+      if (idx >= 0 && idx < this.composer.blocks.length - 1) { const [b] = this.composer.blocks.splice(idx, 1); this.composer.blocks.splice(idx + 1, 0, b); this.renderSedute(); }
+    }));
+    blocksWrap.querySelectorAll("[data-blkdel]").forEach(btn => btn.addEventListener("click", () => {
+      if (this.composer.blocks.length <= 1) return;
+      if (!confirm("Eliminare questo blocco? Gli esercizi collegati vengono scollegati solo da qui, restano nel catalogo.")) return;
+      this.composer.blocks = this.composer.blocks.filter(x => x.id !== btn.dataset.blkdel);
+      if (this.composer.activeBlockId === btn.dataset.blkdel) this.composer.activeBlockId = this.composer.blocks[0].id;
+      this.renderSedute();
+    }));
+    blocksWrap.querySelectorAll(".block-chip-del").forEach(btn => btn.addEventListener("click", () => {
+      const b = this.composer.blocks.find(x => x.id === btn.dataset.blkid);
+      if (b) b.exerciseIds = b.exerciseIds.filter(id => id !== btn.dataset.exid);
+      this.renderSedute();
+    }));
+
+    this.main.querySelector("#s-add-block").addEventListener("click", () => {
+      const b = { id: genId(), title: "", notes: "", exerciseIds: [] };
+      this.composer.blocks.push(b);
+      this.composer.activeBlockId = b.id;
+      this.renderSedute();
+    });
     this.main.querySelector("#s-reset").addEventListener("click", () => {
-      this.composer = { id: null, title: "", ids: [], goalkeeperIds: [] };
+      this._resetComposer();
       this.composerFilter = { q: "", status: new Set(), gestures: [], qualities: [], periods: [], materials: [], logic: { gestures: "or", qualities: "or", periods: "or", materials: "or" } };
       this.renderSedute();
     });
     this.main.querySelector("#s-save").addEventListener("click", () => this._saveSession());
 
-    // --- filtri del SELETTORE seduta (riusa gli stessi componenti dell'indice) ---
+    // --- filtri del SELETTORE seduta (riusa gli stessi componenti dell'indice); scoped al blocco attivo ---
     const cBar = this.main.querySelector("#composer-filters");
     const cSearch = this.main.querySelector("#cf-search");
     cSearch.addEventListener("input", () => { this.composerFilter.q = cSearch.value; this._refreshComposerLists(); });
@@ -1977,7 +2123,8 @@ export class UI {
   }
 
   _sessionPick(ex) {
-    const checked = this.composer.ids.includes(ex.id) ? "checked" : "";
+    const activeBlock = this._activeComposerBlock();
+    const checked = activeBlock && activeBlock.exerciseIds.includes(ex.id) ? "checked" : "";
     return `<label class="pick-row">
       <input type="checkbox" data-pick="${escapeAttr(ex.id)}" ${checked}>
       <span class="pick-title">${escapeHtml(ex.title)}</span>
@@ -1990,40 +2137,62 @@ export class UI {
     if (panel) panel.innerHTML = this._aggregationPanel();
   }
 
-  // Aggiorna le due liste del selettore: "nella seduta" (non filtrata) e "disponibili" (filtrata).
+  // Aggiorna le due liste del selettore: "nel blocco attivo" (non filtrata) e "disponibili" (filtrata).
   _refreshComposerLists() {
     const chosenWrap = this.main.querySelector("#pick-chosen");
     const availWrap = this.main.querySelector("#pick-available");
     if (!chosenWrap || !availWrap) return;
-    const chosen = this.composer.ids.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
-    const availableAll = this.exercises.filter(ex => !this.composer.ids.includes(ex.id));
+    const activeBlock = this._activeComposerBlock();
+    const activeIds = activeBlock ? activeBlock.exerciseIds : [];
+    const chosen = activeIds.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
+    const availableAll = this.exercises.filter(ex => !activeIds.includes(ex.id));
     const available = this._applyExerciseFilters(availableAll, this.composerFilter)
       .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 
     chosenWrap.innerHTML = chosen.length
       ? chosen.map(ex => this._sessionPick(ex)).join("")
-      : `<p class="muted small">Nessun esercizio aggiunto: selezionali qui sotto.</p>`;
+      : `<p class="muted small">Nessun esercizio in questo blocco: aggiungili qui sotto (facoltativo).</p>`;
     availWrap.innerHTML = !this.exercises.length
       ? `<p class="muted small">Nessun esercizio in archivio.</p>`
       : (available.length ? available.map(ex => this._sessionPick(ex)).join("")
         : `<p class="muted small">Nessun esercizio disponibile con questi filtri.</p>`);
 
-    const cc = this.main.querySelector("#pick-chosen-count"); if (cc) cc.textContent = this.composer.ids.length;
+    const cc = this.main.querySelector("#pick-chosen-count"); if (cc) cc.textContent = activeIds.length;
     const ac = this.main.querySelector("#cf-count"); if (ac) ac.textContent = `${available.length} esercizi disponibili`;
 
     this.main.querySelectorAll("[data-pick]").forEach(cb =>
       cb.addEventListener("change", () => {
         const id = cb.dataset.pick;
-        if (cb.checked) { if (!this.composer.ids.includes(id)) this.composer.ids.push(id); }
-        else this.composer.ids = this.composer.ids.filter(x => x !== id);
+        const b = this._activeComposerBlock();
+        if (!b) return;
+        if (cb.checked) { if (!b.exerciseIds.includes(id)) b.exerciseIds.push(id); }
+        else b.exerciseIds = b.exerciseIds.filter(x => x !== id);
         this._refreshComposerLists();
         this._refreshAgg();
+        this._refreshActiveBlockChipsInline(b);
       }));
   }
 
+  // Aggiorna solo i chip esercizi del blocco attivo nella colonna sinistra, senza un render
+  // completo (che farebbe perdere focus/scroll sui filtri del selettore appena usati).
+  _refreshActiveBlockChipsInline(b) {
+    const card = [...this.main.querySelectorAll(".sess-block")].find(el => el.dataset.blockid === b.id);
+    if (!card) return;
+    const chipsWrap = card.querySelector(".block-chips");
+    if (!chipsWrap) return;
+    chipsWrap.innerHTML = this._blockChipsHtml(b);
+    chipsWrap.querySelectorAll(".block-chip-del").forEach(btn => btn.addEventListener("click", () => {
+      const bb = this.composer.blocks.find(x => x.id === btn.dataset.blkid);
+      if (bb) bb.exerciseIds = bb.exerciseIds.filter(id => id !== btn.dataset.exid);
+      this.renderSedute();
+    }));
+  }
+
   _aggregationPanel() {
-    const chosen = this.composer.ids.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
+    const allIds = [...new Set((this.composer.blocks || []).flatMap(b => b.exerciseIds || []))];
+    const chosen = allIds.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
     const agg = aggregateSession(chosen);
+    const showDuration = this.profile && this.profile.appMode === "completa";
     const quals = agg.qualitiesCovered.map(q => `<span class="chip chip-sm">${escapeHtml(q)}</span>`).join("") || `<span class="muted small">—</span>`;
     const periods = agg.periodsCovered.map(p => `<span class="chip chip-sm">${escapeHtml(p)}</span>`).join("") || `<span class="muted small">—</span>`;
     const mats = agg.materialsAggregated.map(m => {
@@ -2034,7 +2203,7 @@ export class UI {
       <h3>Riepilogo Seduta</h3>
       <div class="stat-duo">
         <div class="stat"><span class="stat-label">Esercizi</span><span class="stat-value">${chosen.length}</span></div>
-        <div class="stat stat-hero"><span class="stat-label">Durata totale</span><span class="stat-value">${formatDuration(agg.totalDurationSeconds)}</span></div>
+        ${showDuration ? `<div class="stat stat-hero"><span class="stat-label">Durata totale</span><span class="stat-value">${formatDuration(agg.totalDurationSeconds)}</span></div>` : ""}
       </div>
       <div class="agg-block"><span class="field-label">Qualità allenate</span><div class="chips">${quals}</div></div>
       <div class="agg-block"><span class="field-label">Periodi coperti</span><div class="chips">${periods}</div></div>
@@ -2044,9 +2213,10 @@ export class UI {
 
   async _saveSession() {
     if (!this.composer.title.trim()) { this.toast("Dai un titolo alla seduta.", "error"); return; }
-    if (!this.composer.ids.length) { this.toast("Seleziona almeno un esercizio.", "error"); return; }
     const now = new Date().toISOString();
-    const chosen = this.composer.ids.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
+    const blocks = this.composer.blocks.map(b => ({ id: b.id, title: (b.title || "").trim(), notes: (b.notes || "").trim(), exerciseIds: [...(b.exerciseIds || [])] }));
+    const flatIds = [...new Set(blocks.flatMap(b => b.exerciseIds))];
+    const chosen = flatIds.map(id => this.exercises.find(x => x.id === id)).filter(Boolean);
     const existing = this.composer.id ? this.sessions.find(s => s.id === this.composer.id) : null;
     const session = {
       ...(existing || {}),
@@ -2055,7 +2225,8 @@ export class UI {
       createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
       title: this.composer.title.trim(),
-      exerciseIds: [...this.composer.ids],
+      blocks,
+      exerciseIds: flatIds,   // cache piatta retrocompatibile (Report/Presenze/scheda portiere)
       goalkeeperIds: [...(this.composer.goalkeeperIds || [])],
       aggregated: aggregateSession(chosen),
       status: existing?.status || "memory"
@@ -2063,7 +2234,7 @@ export class UI {
     await storage.putSession(session);
     const idx = this.sessions.findIndex(s => s.id === session.id);
     if (idx >= 0) this.sessions[idx] = session; else this.sessions.push(session);
-    this.composer = { id: null, title: "", ids: [], goalkeeperIds: [] };
+    this._resetComposer();
     this.toast("Seduta salvata.");
     this.renderSedute();
   }
@@ -2073,12 +2244,16 @@ export class UI {
       const mat = this.customLists.materials.find(x => x.key === m.key);
       return `${escapeHtml(mat ? mat.label : m.key)}×${m.qty}`;
     }).join(", ");
+    const showDuration = this.profile && this.profile.appMode === "completa";
+    const blockTitles = (s.blocks || []).map(b => (b.title || "").trim()).filter(Boolean);
+    const nBlocks = (s.blocks || []).length;
     const periodiz = s.periodizationSuggestion
       ? `<div class="periodiz"><span class="field-label">Periodizzazione (da Claude)</span><p>${escapeHtml(s.periodizationSuggestion)}</p></div>` : "";
     return `<article class="sess-card" data-sid="${escapeAttr(s.id)}">
       <div class="sess-head"><h3>${escapeHtml(s.title)}</h3>
         <button type="button" class="star ${s.status==='favorite'?'is-on':''}" data-sfav="${escapeAttr(s.id)}">★</button></div>
-      <div class="ex-meta"><span>${(s.exerciseIds||[]).length} esercizi</span><span class="dot">·</span><span>⏱ ${formatDuration(s.aggregated?.totalDurationSeconds || 0)}</span></div>
+      <div class="ex-meta"><span>${nBlocks} blocc${nBlocks === 1 ? "o" : "hi"}</span><span class="dot">·</span><span>${(s.exerciseIds||[]).length} esercizi</span>${showDuration ? `<span class="dot">·</span><span>⏱ ${formatDuration(s.aggregated?.totalDurationSeconds || 0)}</span>` : ""}</div>
+      ${blockTitles.length ? `<div class="ex-chips">${blockTitles.map(t => `<span class="chip chip-sm">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
       <div class="ex-chips">${(s.aggregated?.qualitiesCovered||[]).slice(0,4).map(q=>`<span class="chip chip-sm">${escapeHtml(q)}</span>`).join("")}</div>
       ${mats ? `<p class="muted small">Materiali: ${escapeHtml(mats)}</p>` : ""}
       ${(s.aggregated?.periodsCovered||[]).length ? `<p class="muted small">Periodi: ${escapeHtml((s.aggregated.periodsCovered).join(", "))}</p>` : ""}
@@ -2099,7 +2274,9 @@ export class UI {
     }));
     this.main.querySelectorAll("[data-sedit]").forEach(b => b.addEventListener("click", () => {
       const s = this.sessions.find(x => x.id === b.dataset.sedit); if (!s) return;
-      this.composer = { id: s.id, title: s.title, ids: [...(s.exerciseIds||[])], goalkeeperIds: [...(s.goalkeeperIds||[])] };
+      const srcBlocks = (s.blocks && s.blocks.length) ? s.blocks : [{ id: genId(), title: "Esercizi", notes: "", exerciseIds: [...(s.exerciseIds || [])] }];
+      const blocks = srcBlocks.map(b => ({ id: b.id || genId(), title: b.title || "", notes: b.notes || "", exerciseIds: [...(b.exerciseIds || [])] }));
+      this.composer = { id: s.id, title: s.title, blocks, activeBlockId: blocks[0].id, goalkeeperIds: [...(s.goalkeeperIds||[])] };
       this.renderSedute();
     }));
     this.main.querySelectorAll("[data-sdel]").forEach(b => b.addEventListener("click", async () => {
@@ -2116,6 +2293,7 @@ export class UI {
       triggerDownload(`${slugFile(s.title)}.json`, json);
     }));
   }
+
 
   // ========================================================================
   // ====================  PORTIERI (anagrafica + schede)  ==================
@@ -2228,6 +2406,12 @@ export class UI {
     return this._countActiveFilters([!!f.category, f.status !== "all"]);
   }
 
+  // Badge di stato salute (schema 2.4): riusato in card, scheda dettaglio, editor e picker.
+  _healthBadge(gk, extraClass) {
+    const status = HEALTH_STATUS_ORDER.includes(gk.healthStatus) ? gk.healthStatus : "healthy";
+    return `<span class="health-badge health-${status}${extraClass ? " " + extraClass : ""}">${HEALTH_STATUS_LABELS[status]}</span>`;
+  }
+
   _goalkeeperCard(gk) {
     const age = this._gkAge(gk.birthDate);
     return `
@@ -2242,7 +2426,10 @@ export class UI {
         <div class="gk-card-body">
           <h3 class="gk-card-title">${escapeHtml(this._gkFullName(gk))}</h3>
           <p class="gk-card-sub">${gk.category ? escapeHtml(gk.category) : '<span class="muted">Senza categoria</span>'}${age != null ? ` · ${age} anni` : ""}</p>
-          <span class="gk-badge ${gk.active ? 'is-active' : 'is-inactive'}">${gk.active ? "Attivo" : "Non attivo"}</span>
+          <div class="gk-badges">
+            ${this._healthBadge(gk)}
+            <span class="gk-badge ${gk.active ? 'is-active' : 'is-inactive'}">${gk.active ? "Attivo" : "Non attivo"}</span>
+          </div>
         </div>
       </article>`;
   }
@@ -2281,6 +2468,7 @@ export class UI {
     this.gkForm = {
       id: editing ? editing.id : null,
       photo: editing ? (editing.photo || null) : null,
+      healthStatus: (editing && HEALTH_STATUS_ORDER.includes(editing.healthStatus)) ? editing.healthStatus : "healthy",
       notes: {
         technical: baseNote(editing && editing.notes && editing.notes.technical),
         mental: baseNote(editing && editing.notes && editing.notes.mental),
@@ -2319,6 +2507,12 @@ export class UI {
             <label>Cognome<input type="text" id="gk-last" class="input" value="${escapeAttr(editing?.lastName || "")}"></label>
             <label>Data di nascita<input type="date" id="gk-birth" class="input" value="${escapeAttr(editing?.birthDate || "")}"></label>
             <label>Categoria<select id="gk-category" class="input">${catOpts}</select></label>
+            <div class="gk-health-field form-wide">
+              <span class="field-label">Stato</span>
+              <div class="gk-health-opts" id="gk-health-opts">
+                ${HEALTH_STATUS_ORDER.map(k => `<label class="gk-health-opt health-${k}"><input type="radio" name="gk-health" value="${k}" ${(this.gkForm.healthStatus || "healthy") === k ? "checked" : ""}> <span>${HEALTH_STATUS_LABELS[k]}</span></label>`).join("")}
+              </div>
+            </div>
             <label>Altezza (cm)<input type="number" id="gk-height" class="input" min="0" max="260" value="${editing?.height != null ? escapeAttr(editing.height) : ""}" placeholder="es. 188"></label>
             <div class="gk-foot-field">
               <span class="field-label">Piede preferito</span>
@@ -2338,9 +2532,12 @@ export class UI {
             ${this._gkNoteEditorBlock("Medico", "medical", "gk-tp-medical", "gk-note-medical", "Note mediche / disponibilità…")}
           </div>
 
-          <div class="form-actions">
-            <button type="button" class="btn" id="gk-cancel">Annulla</button>
-            <button type="button" class="btn btn-primary" id="gk-save">${editing ? "Aggiorna portiere" : "Crea portiere"}</button>
+          <div class="form-actionbar">
+            <span class="form-actionbar-label">${editing ? "Modifica portiere" : "Nuovo portiere"}</span>
+            <div class="form-actionbar-btns">
+              <button type="button" class="btn" id="gk-cancel">Annulla</button>
+              <button type="button" class="btn btn-primary" id="gk-save">${editing ? "Aggiorna portiere" : "Crea portiere"}</button>
+            </div>
           </div>
         </div>
       </section>`;
@@ -2396,6 +2593,7 @@ export class UI {
     const lastName = (q("#gk-last").value || "").trim();
     if (!firstName && !lastName) { this.toast("Inserisci almeno nome o cognome.", "error"); return; }
     const footEl = this.main.querySelector('input[name="gk-foot"]:checked');
+    const healthEl = this.main.querySelector('input[name="gk-health"]:checked');
     const heightRaw = (q("#gk-height").value || "").trim();
     const now = new Date().toISOString();
     const existing = f.id ? this.goalkeepers.find(g => g.id === f.id) : null;
@@ -2407,6 +2605,7 @@ export class UI {
       firstName, lastName,
       birthDate: (q("#gk-birth").value || "") || null,
       category: q("#gk-category").value || null,
+      healthStatus: healthEl ? healthEl.value : "healthy",
       preferredFoot: footEl ? footEl.value : null,
       height: heightRaw === "" ? null : Number(heightRaw),
       photo: f.photo || null,
@@ -2509,7 +2708,7 @@ export class UI {
         <div class="card-soft gk-detail-head">
           ${this._gkPhotoHtml(gk, "gk-avatar-xl")}
           <div class="gk-detail-id">
-            <h2>${escapeHtml(this._gkFullName(gk))} <span class="gk-badge ${gk.active ? 'is-active' : 'is-inactive'}">${gk.active ? "Attivo" : "Non attivo"}</span></h2>
+            <h2>${escapeHtml(this._gkFullName(gk))} ${this._healthBadge(gk)} <span class="gk-badge ${gk.active ? 'is-active' : 'is-inactive'}">${gk.active ? "Attivo" : "Non attivo"}</span></h2>
             <p class="muted">${meta.length ? meta.join(" · ") : "Nessun dato anagrafico aggiuntivo."}</p>
           </div>
         </div>
@@ -2697,17 +2896,24 @@ export class UI {
     const n = (ge.goalkeeperIds || []).length;
     return `<span class="imp-label imp-${escapeAttr(ge.eventType)}" data-implabel="${escapeAttr(ge.date)}" title="Modifica impegno">● ${escapeHtml(this._geTypeLabel(ge.eventType))}${n > 0 ? ` [${n}]` : ""}${ge.isOverride ? '<span class="imp-mod" title="Modificato">E</span>' : ""}</span>`;
   }
-  // Elementi collegati in cella: Eventi (card prominenti) poi Sedute (corsivo secondario). limit opzionale con "+N".
+  // Elementi collegati in cella: ordinati per orario (chi non ce l'ha va in coda, mantenendo
+  // Eventi prima di Sedute a parità/assenza di orario). limit opzionale con "+N".
   _impLinkedHtml(ge, limit) {
-    const items = ge.linkedItems || [];
+    const items = [...(ge.linkedItems || [])].sort((a, b) => {
+      const ta = a.time || "", tb = b.time || "";
+      if (!!ta !== !!tb) return ta ? -1 : 1;   // chi ha orario viene prima di chi non ce l'ha
+      if (ta !== tb) return ta.localeCompare(tb);
+      return a.type === b.type ? 0 : (a.type === "specific_event" ? -1 : 1);
+    });
+    const timeBadge = (li) => li.time ? `<span class="imp-time">${escapeHtml(li.time)}</span>` : "";
     const out = [];
     items.filter(li => li.type === "specific_event").forEach(li => {
       const se = this.specificEvents.find(x => x.id === li.id);
-      out.push(`<button type="button" class="imp-event etype-${escapeAttr(se ? se.eventType : "other")}" data-openevent="${escapeAttr(li.id)}">${escapeHtml(se ? se.title : "(evento rimosso)")}</button>`);
+      out.push(`<button type="button" class="imp-event etype-${escapeAttr(se ? se.eventType : "other")}" data-openevent="${escapeAttr(li.id)}">${timeBadge(li)}${escapeHtml(se ? se.title : "(evento rimosso)")}</button>`);
     });
     items.filter(li => li.type === "session").forEach(li => {
       const s = this.sessions.find(x => x.id === li.id);
-      out.push(`<button type="button" class="imp-session" data-opensession="${escapeAttr(li.id)}">${escapeHtml(s ? s.title : "(seduta rimossa)")}</button>`);
+      out.push(`<button type="button" class="imp-session" data-opensession="${escapeAttr(li.id)}">${timeBadge(li)}${escapeHtml(s ? s.title : "(seduta rimossa)")}</button>`);
     });
     let extra = 0;
     let list = out;
@@ -3211,12 +3417,16 @@ export class UI {
     body.querySelector("#m-prev").addEventListener("click", () => { this.seasonView.calMonth = new Date(year, month - 1, 1); this._refreshCalendar(); });
     body.querySelector("#m-next").addEventListener("click", () => { this.seasonView.calMonth = new Date(year, month + 1, 1); this._refreshCalendar(); });
     // Forza la griglia rigida via stile inline (priorità massima), a prova di override.
+    // Su schermi molto stretti le celle si comprimono (la vista "Elenco" resta l'alternativa
+    // già disponibile per chi preferisce una lista invece della griglia 7 colonne).
+    const isNarrow = window.innerWidth <= 460;
+    const cellMinH = isNarrow ? "58px" : "100px";
     const wrap = body.querySelector(".month-grid-wrap");
     if (wrap) wrap.style.cssText = "width:100%;box-sizing:border-box;overflow:hidden;display:block;";
     const grid = body.querySelector(".calendar-month-grid");
     if (grid) {
-      grid.style.cssText = "display:grid !important;grid-template-columns:repeat(7,1fr) !important;width:100% !important;box-sizing:border-box !important;gap:4px;grid-auto-rows:minmax(100px,auto);flex:1 1 100%;min-width:0;";
-      grid.querySelectorAll(".calendar-month-cell").forEach(cell => { cell.style.cssText = "width:100% !important;min-width:0;min-height:100px;box-sizing:border-box;overflow:hidden;"; });
+      grid.style.cssText = `display:grid !important;grid-template-columns:repeat(7,1fr) !important;width:100% !important;box-sizing:border-box !important;gap:${isNarrow ? "2px" : "4px"};grid-auto-rows:minmax(${cellMinH},auto);flex:1 1 100%;min-width:0;`;
+      grid.querySelectorAll(".calendar-month-cell").forEach(cell => { cell.style.cssText = `width:100% !important;min-width:0;min-height:${cellMinH};box-sizing:border-box;overflow:hidden;`; });
     }
     const dowRow = body.querySelector(".calendar-month-dow");
     if (dowRow) dowRow.style.cssText = "display:grid;grid-template-columns:repeat(7,1fr);width:100%;box-sizing:border-box;gap:4px;margin-bottom:4px;";
@@ -3389,19 +3599,22 @@ export class UI {
         <button type="button" class="seg-btn is-on" data-lktab="sessions">Sedute</button>
         <button type="button" class="seg-btn" data-lktab="events">Eventi</button>
       </div>
+      <label class="field lk-time-field"><span class="field-label">Orario (opzionale, utile con più sedute/eventi lo stesso giorno)</span><input type="time" class="input" id="lk-time"></label>
       <input type="search" class="input lk-q" id="lk-q" placeholder="Cerca…">
       <div class="lk-results" id="lk-results"></div>
       <div class="lk-foot"><button type="button" class="btn btn-soft" id="lk-create"></button></div>
       <div class="modal-actions"><button type="button" class="btn" data-mcancel>Chiudi</button></div>`);
     const resEl = overlay.querySelector("#lk-results");
     const qEl = overlay.querySelector("#lk-q");
+    const timeEl = overlay.querySelector("#lk-time");
     const createBtn = overlay.querySelector("#lk-create");
     let tab = "sessions";
     let items = [];   // dati del tab corrente, caricati dal solo store pertinente
 
     const addLink = async (type, id) => {
       ge.linkedItems = ge.linkedItems || [];
-      if (!ge.linkedItems.some(li => li.type === type && li.id === id)) ge.linkedItems.push({ type, id });
+      const time = (timeEl.value || "").trim();
+      if (!ge.linkedItems.some(li => li.type === type && li.id === id)) ge.linkedItems.push({ type, id, time });
       ge.updatedAt = new Date().toISOString();
       await storage.saveGenericEvent(ge); await this._reloadGenericEvents();
       close(); reopenDay();
@@ -4473,6 +4686,18 @@ export class UI {
       <section class="view">
         <div class="view-head"><div><h2>Impostazioni</h2><p class="muted">Account, liste configurabili e backup</p></div></div>
 
+        <div class="card-soft app-mode-card">
+          <h3>Modalità app</h3>
+          <p class="muted">In modalità <b>Semplice</b> restano nascoste le sezioni Presenze e Report e il
+            dettaglio tempi negli esercizi (serie/ripetizioni/recupero) — pensata per l'uso quotidiano.
+            In modalità <b>Completa</b> torna tutto visibile. Nessun dato viene mai eliminato passando
+            da una modalità all'altra.</p>
+          <div class="seg app-mode-seg" id="app-mode-seg">
+            <button type="button" class="seg-btn ${this.profile.appMode !== "completa" ? "is-on" : ""}" data-appmode="semplice">Semplice</button>
+            <button type="button" class="seg-btn ${this.profile.appMode === "completa" ? "is-on" : ""}" data-appmode="completa">Completa</button>
+          </div>
+        </div>
+
         <div class="card-soft account-sync">
           <h3>Account e sincronizzazione</h3>
           <div id="account-sync-mount"></div>
@@ -4503,6 +4728,19 @@ export class UI {
         <div id="settings-mount"></div>
       </section>
     `;
+
+    this.main.querySelectorAll("[data-appmode]").forEach(b => b.addEventListener("click", async () => {
+      const mode = b.dataset.appmode;
+      if (this.profile.appMode === mode) return;
+      this.profile.appMode = mode;
+      this.profile.updatedAt = new Date().toISOString();
+      await storage.saveProfile(this.profile);
+      this.toast(mode === "semplice" ? "Modalità semplice attivata." : "Modalità completa attivata.");
+      // Rigenera la barra di navigazione (le voci disponibili dipendono dalla modalità)
+      // e riapre Impostazioni, esattamente come al boot.
+      this._buildShell();
+      this.setRoute("impostazioni");
+    }));
 
     this._renderAccountSync();
     // Tiene la sezione Account aggiornata mentre Impostazioni resta aperta (stato di sync,

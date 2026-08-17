@@ -1,4 +1,11 @@
-# Repository Esercizi Portieri
+# Repository Esercizi Portieri — ramo "snella" (v1.0)
+
+> **Nota**: questo pacchetto è un **ramo di sviluppo separato** ("snella"), nato da
+> `repository-portieri-v2.4-001` con l'obiettivo di semplificare l'uso quotidiano
+> (modalità Semplice/Completa, sedute a blocchi liberi, tag stato salute portiere,
+> orari multipli in Stagione, tempi esercizi nascosti di default). Vedi CHANGELOG.md
+> per il dettaglio. Il ramo originale resta disponibile e recuperabile in caso questo
+> lavoro non convincesse — nessuna delle due linee di sviluppo sovrascrive l'altra.
 
 Archivio **locale, offline e senza AI** per gestire i tuoi esercizi di
 allenamento per portieri. Vanilla JavaScript + IndexedDB, nessuna dipendenza

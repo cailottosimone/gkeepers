@@ -244,12 +244,25 @@ export function migrateExerciseToCurrent(ex) {
   return { item: out, changed };
 }
 
-// Migrazione di una seduta allo schema corrente: aggiunge aggregated.periodsCovered = []
+// Migrazione di una seduta allo schema corrente:
+//  - aggiunge aggregated.periodsCovered = [] (schema 2.2)
+//  - introduce blocks[] (schema 2.4): sedute preesistenti (solo exerciseIds piatti) vengono
+//    avvolte in UN blocco unico "Esercizi", senza perdita né alterazione di dati.
 export function migrateSessionToCurrent(s) {
   if (!s || typeof s !== "object") return { item: s, changed: false };
-  const agg = (s.aggregated && typeof s.aggregated === "object") ? s.aggregated : {};
-  if (Array.isArray(agg.periodsCovered)) return { item: s, changed: false };
-  return { item: { ...s, aggregated: { ...agg, periodsCovered: [] } }, changed: true };
+  let changed = false;
+  let out = s;
+  const agg = (out.aggregated && typeof out.aggregated === "object") ? out.aggregated : {};
+  if (!Array.isArray(agg.periodsCovered)) {
+    out = { ...out, aggregated: { ...agg, periodsCovered: [] } };
+    changed = true;
+  }
+  if (!Array.isArray(out.blocks)) {
+    const legacyIds = Array.isArray(out.exerciseIds) ? out.exerciseIds : [];
+    out = { ...out, blocks: [{ id: genId(), title: "Esercizi", notes: "", exerciseIds: [...legacyIds] }] };
+    changed = true;
+  }
+  return { item: out, changed };
 }
 
 export function exportToJsonString(items, customLists, profile) {
@@ -465,6 +478,17 @@ function normalizeSession(it) {
   s.updatedAt = safeString(it.updatedAt) || s.createdAt;
   s.title = safeString(it.title, "Seduta senza titolo");
   s.exerciseIds = Array.isArray(it.exerciseIds) ? it.exerciseIds.filter(x => typeof x === "string") : [];
+  // schema 2.4: blocchi liberi (titolo + note + esercizi opzionali). Se il file importato non
+  // li ha (backup pre-2.4, o esportato dall'artefatto Claude), si ricostruisce un blocco unico
+  // dai vecchi exerciseIds — nessuna perdita di dati.
+  s.blocks = Array.isArray(it.blocks) && it.blocks.length
+    ? it.blocks.map(b => ({
+        id: safeString(b && b.id) || genId(),
+        title: safeString(b && b.title),
+        notes: safeString(b && b.notes),
+        exerciseIds: Array.isArray(b && b.exerciseIds) ? b.exerciseIds.filter(x => typeof x === "string") : []
+      }))
+    : [{ id: genId(), title: "Esercizi", notes: "", exerciseIds: [...s.exerciseIds] }];
   // schema 2.2: portieri coinvolti nella seduta (alimenta lo storico nella scheda portiere)
   s.goalkeeperIds = Array.isArray(it.goalkeeperIds) ? it.goalkeeperIds.filter(x => typeof x === "string") : [];
   const a = it.aggregated || {};
@@ -497,6 +521,9 @@ function normalizeGoalkeeper(it) {
   g.lastName = safeString(it.lastName);
   g.birthDate = safeString(it.birthDate) || null;
   g.category = safeString(it.category) || null;
+  // Schema 2.4: tag di stato salute, sempre visibile in evidenza (card/scheda/picker).
+  // Fallback difensivo: qualunque record precedente o valore non riconosciuto -> "healthy".
+  g.healthStatus = ["healthy", "injured", "recovering"].includes(it.healthStatus) ? it.healthStatus : "healthy";
   g.preferredFoot = ["left", "right", "ambidextrous"].includes(it.preferredFoot) ? it.preferredFoot : null;
   g.height = numOrNull(it.height);
   g.photo = typeof it.photo === "string" ? it.photo : null;
@@ -610,10 +637,12 @@ function normalizeGenericEvent(it) {
   g.date = safeString(it.date) || null;
   g.eventType = _GE_TYPES.includes(it.eventType) ? it.eventType : "other";
   g.goalkeeperIds = Array.isArray(it.goalkeeperIds) ? it.goalkeeperIds.filter(x => typeof x === "string") : [];
+  // Schema 2.4: ogni link porta un orario libero opzionale (es. "17:00"), per distinguere
+  // più sedute/eventi collegati allo stesso giorno. Campo additivo, fallback "" se assente.
   g.linkedItems = Array.isArray(it.linkedItems)
     ? it.linkedItems
         .filter(li => li && (li.type === "session" || li.type === "specific_event") && typeof li.id === "string")
-        .map(li => ({ type: li.type, id: li.id }))
+        .map(li => ({ type: li.type, id: li.id, time: safeString(li.time) || "" }))
     : [];
   g.notes = typeof it.notes === "string" ? it.notes : "";
   g.isOverride = !!it.isOverride;

@@ -4,7 +4,7 @@
 // non modificabile né eliminabile. I materiali custom ricevono un simbolo
 // generico con etichetta in fase di creazione (vedi settings.js).
 
-export const SCHEMA_VERSION = "2.3";
+export const SCHEMA_VERSION = "2.4";
 
 // --- Simboli SVG dei materiali (disegnati centrati attorno a 0,0, footprint ~40x40) ---
 // Vengono usati sia nella palette dell'editor sia nel canvas.
@@ -274,6 +274,15 @@ export const PREFERRED_FOOT_LABELS = {
   left: "Sinistro",
   right: "Destro",
   ambidextrous: "Ambidestro"
+};
+
+// Tag di stato salute portiere (schema 2.4) — un solo valore, sempre visibile in evidenza.
+// Non sostituisce le note mediche (diario dettagliato): è il colpo d'occhio immediato.
+export const HEALTH_STATUS_ORDER = ["healthy", "injured", "recovering"];
+export const HEALTH_STATUS_LABELS = {
+  healthy: "In salute",
+  injured: "Infortunato",
+  recovering: "In recupero"
 };
 
 export function buildDefaultCustomLists() {

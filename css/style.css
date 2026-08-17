@@ -577,7 +577,23 @@ textarea.input { resize: vertical; line-height: 1.55; min-height: 88px; }
 .pick-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--pitch); flex: none; }
 .pick-title { flex: 1; font-weight: 600; font-size: 13.5px; }
 .pick-row .muted { font-variant-numeric: tabular-nums; }
-.composer-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+/* Composer sedute a blocchi liberi (schema 2.4) */
+.sess-blocks { display: flex; flex-direction: column; gap: 12px; margin: 10px 0 12px; }
+.sess-block { padding: 14px; border: 1px solid var(--line-soft); transition: border-color var(--t), box-shadow var(--t); }
+.sess-block.is-active { border-color: var(--pitch-100); box-shadow: 0 0 0 3px var(--pitch-50); }
+.sess-block-head { display: flex; align-items: center; gap: 8px; }
+.sess-block-head .block-title { flex: 1 1 auto; font-weight: 650; }
+.sess-block-tools { display: flex; gap: 6px; flex: none; }
+.sess-block-tools .icon-btn { width: 32px; height: 32px; font-size: 13px; }
+.block-notes { margin-top: 8px; min-height: 56px; font-size: 13.5px; }
+.block-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.block-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--inset); border: 1px solid var(--line-soft); border-radius: var(--r-pill); padding: 4px 6px 4px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.block-chip-del { border: 0; background: none; color: var(--ink-3); width: 20px; height: 20px; border-radius: 50%; font-size: 11px; line-height: 1; transition: background var(--t), color var(--t); }
+.block-chip-del:hover { background: var(--danger-50); color: var(--danger); }
+.sess-block .link-btn { margin-top: 10px; padding: 6px 0; }
+.sess-block .link-btn.is-active-hint { color: var(--pitch-dark); cursor: default; }
+.composer-picker { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line-soft); }
+@media (max-width: 620px) { .sess-block-head { flex-wrap: wrap; } .sess-block-head .block-title { flex-basis: 100%; order: -1; } .sess-block-tools .icon-btn { width: 40px; height: 40px; } .block-chip-del { width: 26px; height: 26px; } .gk-health-opt { padding: 9px 14px; } }
 .agg { position: sticky; top: 92px; }
 .agg-block { margin-top: 20px; }
 .agg-block .field-label { display: block; margin-bottom: 9px; }
@@ -1022,6 +1038,28 @@ button:focus-visible, a:focus-visible { border-radius: var(--r-xs); }
 .gk-badge { align-self: flex-start; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 9px; border-radius: var(--r-pill); border: 1px solid transparent; }
 .gk-badge.is-active { background: var(--pitch-50); color: var(--pitch-dark); border-color: var(--pitch-100); }
 .gk-badge.is-inactive { background: #ececec; color: #777; border-color: #ddd; }
+.gk-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* Tag stato salute portiere (schema 2.4) — un solo valore, sempre in evidenza. */
+.health-badge { align-self: flex-start; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 9px; border-radius: var(--r-pill); border: 1px solid transparent; }
+.health-badge.health-healthy { background: var(--pitch-50); color: var(--pitch-dark); border-color: var(--pitch-100); }
+.health-badge.health-injured { background: var(--danger-50); color: var(--danger); border-color: #f6cfca; }
+.health-badge.health-recovering { background: var(--amber-50); color: var(--amber-dark); border-color: #ffe4a8; }
+
+.gk-health-field { display: flex; flex-direction: column; gap: 6px; }
+.gk-health-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.gk-health-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: var(--r-pill); border: 1px solid var(--line); cursor: pointer; transition: background var(--t), border-color var(--t); }
+.gk-health-opt input { accent-color: var(--pitch); }
+.gk-health-opt:has(input:checked).health-healthy { background: var(--pitch-50); border-color: var(--pitch-100); color: var(--pitch-dark); }
+.gk-health-opt:has(input:checked).health-injured { background: var(--danger-50); border-color: #f6cfca; color: var(--danger); }
+.gk-health-opt:has(input:checked).health-recovering { background: var(--amber-50); border-color: #ffe4a8; color: var(--amber-dark); }
+
+/* Modalità app (Impostazioni) */
+.app-mode-card .app-mode-seg { margin-top: 10px; }
+
+/* Orario opzionale sui link stagione (schema 2.4) */
+.imp-time { display: inline-block; font-variant-numeric: tabular-nums; font-weight: 700; opacity: .8; margin-right: 5px; }
+.lk-time-field { margin: 10px 0; }
 
 /* Filtri indice portieri: stile unificato nello standard filtri (vedi .gk-filters-row sopra) */
 
@@ -1119,7 +1157,15 @@ button:focus-visible, a:focus-visible { border-radius: var(--r-xs); }
 .cal-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 1100px) { .cal-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .cal-days { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px) { .cal-days { grid-template-columns: 1fr; } }
+@media (max-width: 460px) {
+  .cal-days { grid-template-columns: 1fr; }
+  .mcell-num { font-size: .68rem; }
+  .imp-label { font-size: .62rem; }
+  .imp-event, .imp-session { font-size: .64rem; padding: 1px 4px; margin-top: 2px; }
+  .imp-time { margin-right: 3px; }
+  .ge-del { width: 20px; height: 20px; }
+  .month-title { font-size: 14px; }
+}
 .cal-day { position: relative; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--card); min-height: 96px; display: flex; flex-direction: column; }
 .cal-day-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px 6px; border-bottom: 1px solid var(--line-soft); background: var(--inset); border-radius: var(--r-sm) var(--r-sm) 0 0; }
 .cal-day-name { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-2); }

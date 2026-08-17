@@ -3,6 +3,59 @@
 Le voci più recenti sono in cima; lo storico precedente resta sotto e non viene mai cancellato.
 Formato pacchetto di consegna: `repository-portieri-v{X.Y}-{progressivo}.zip` (progressivo univoco, mai sovrascritto).
 
+## snella-v1.0-001 — 2026-08-17 (RAMO STACCATO da v2.4-001)
+Refactor di semplificazione richiesto esplicitamente come **ramo di sviluppo separato**:
+il ramo `v2.4-xxx` originale resta intatto e recuperabile, questo pacchetto (`snella-v1.0-xxx`)
+prosegue autonomamente. Schema JSON `SCHEMA_VERSION` 2.3 → **2.4** (tutte le aggiunte sotto
+sono additive: import di backup più vecchi resta pienamente compatibile).
+
+- **Modalità app Semplice/Completa** (`profile.appMode`, default "semplice"): nuova card in
+  Impostazioni con selettore. In modalità Semplice, Presenze e Report escono dalla barra di
+  navigazione e diventano irraggiungibili anche via route diretta (`setRoute` le reindirizza);
+  in modalità Completa tornano visibili identiche a prima. **Nessun file cancellato, nessuna
+  logica rimossa**: è un filtro di visualizzazione, reversibile in qualunque momento senza
+  perdita di dati, pensato anche in vista di un'eventuale distinzione futura tra edizione
+  gratuita/base e edizione completa a pagamento.
+- **Tag di stato salute portiere** (`goalkeeper.healthStatus`: In salute / Infortunato / In
+  recupero, default "healthy"): badge colorato sempre visibile su card portiere, scheda
+  dettaglio e form di modifica. Resta distinto dalle note mediche esistenti (tags + testo
+  libero), che continuano a fare da diario dettagliato.
+- **Sedute a blocchi liberi** (`session.blocks: [{id, title, notes, exerciseIds}]`): la seduta
+  non è più un elenco piatto di soli esercizi da catalogo, ma una sequenza di blocchi liberi
+  (titolo + note libere), con esercizi dal catalogo agganciabili in modo **opzionale** per
+  blocco. Composer riscritto: un blocco alla volta è "attivo" per l'aggiunta di esercizi
+  (stesso selettore con filtri di prima, ora scoped al blocco), riordino su/giù, eliminazione
+  blocco. **Migrazione automatica non distruttiva**: le sedute esistenti (solo `exerciseIds`
+  piatti) vengono avvolte in un blocco unico "Esercizi" al primo caricamento, sia da IndexedDB
+  sia da import JSON. `session.exerciseIds`/`session.aggregated` restano in cima alla seduta
+  come cache piatta derivata dai blocchi ad ogni salvataggio, per compatibilità totale con
+  Report, Presenze e scheda portiere (storico sedute/esercizi), che continuano a leggerli senza
+  alcuna modifica.
+- **Tempi esercizi nascosti in modalità Semplice**: il blocco "Struttura dell'esercizio"
+  (serie/ripetizioni/tempo di lavoro/recupero, anteprima durata) sparisce dal form di
+  creazione/modifica esercizio, dalla card e dalla scheda dettaglio quando l'app è in modalità
+  Semplice; identico a prima in modalità Completa. **Nessuna perdita di dati**: se un esercizio
+  aveva già dei tempi (creato in modalità Completa), il salvataggio in modalità Semplice
+  preserva i valori esistenti invece di azzerarli, perché il form semplificato non li legge né
+  li sovrascrive.
+- **Orari multipli in Stagione**: ogni collegamento seduta/evento su un giorno
+  (`genericEvent.linkedItems[].time`, opzionale) può ora avere un orario libero. Il picker
+  "Collega elemento" ha un campo orario facoltativo; gli elementi collegati in un giorno sono
+  ordinati per orario con badge orario visibile (utile quando un giorno ha più sedute, es.
+  mattina/pomeriggio). Nessuna modifica al modello "un giorno = un `GenericEvent`": è
+  un'aggiunta additiva dentro `linkedItems`, che già supportava più collegamenti per giorno.
+- **Passata usabilità mobile**: barra azioni sticky (pattern già in uso nell'editor esercizio)
+  estesa al composer Sedute e al form Portiere; griglia calendario mensile più compatta sotto i
+  460px (font/pillole/gap ridotti, min-height dimezzata) — la vista "Elenco" resta l'alternativa
+  agenda-style già disponibile per chi preferisce una lista alla griglia; target di tocco
+  aumentati per i controlli piccoli (riordino blocchi, rimozione chip) sotto i 620px.
+- Verifica: `node --check` su tutti i file JS (incluso `js/data/*`, `js/components/*`), test di
+  bilanciamento graffe CSS, module-graph test statico (import/export coerenti su tutti i moduli),
+  test funzionali mirati su migrazione sedute legacy→blocchi, default `healthStatus`, e
+  normalizzazione `linkedItems.time` — nessun ambiente browser reale disponibile in questa
+  sessione per uno smoke test end-to-end: consigliata una verifica manuale rapida dopo
+  l'apertura (vedi messaggio di consegna in chat per i punti da controllare).
+
 ## v2.4-001 — 2026-08-17
 - **Sincronizzazione cloud (facoltativa), stesso sistema di Vacation Builder**: nuovo modulo `js/data/` (`config.js`, `auth.js`, `cloud.js`, `sync.js`) + `js/components/sync-indicator.js` + `supabase/schema.sql`/`supabase/README.md`. Login email+password via Supabase (stesso progetto condiviso della suite, schema Postgres dedicato `portieri`), pattern outbox (coda locale delle modifiche non ancora inviate) con drain ogni 5s e pull ogni 60s, conflitti risolti last-write-wins su `updatedAt` **autorevole lato server** (trigger Postgres, non l'orologio del dispositivo). Nuovo indicatore di stato nella barra di navigazione (Offline / Cloud non collegato / Da collegare / Sincronizzazione… / Sincronizzato / Errore, con badge del numero di modifiche in coda), cliccabile per aprire la nuova sezione **Impostazioni → Account e sincronizzazione** (login/registrazione, scelta esplicita "primo dispositivo → carica i dati locali" oppure "dispositivo successivo → scarica i dati dal cloud", disconnessione). Facoltativa in tutto e per tutto: senza account collegato l'app resta identica a prima, solo IndexedDB locale.
   - **Immagini** (allegati esercizio, foto portiere, logo profilo) caricate su Supabase Storage (bucket privato `portieri-immagini`) con **dedup per hash del contenuto**: la stessa immagine, anche riusata su record diversi o arrivata da un altro dispositivo, non viene mai ricaricata due volte. Adattamento rispetto a Vacation Builder: qui le immagini non sono sempre "array di stringhe data URL" (`exercise.attachments` è un array di oggetti `{type,name,dataUrl}`, `goalkeeper.photo`/`profile.logo` sono stringhe singole) — nuovo resolver generalizzato in `js/data/cloud.js` che gestisce entrambe le forme.
