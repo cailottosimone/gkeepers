@@ -277,6 +277,8 @@ export function render(container) {
             <div class="gk-voce-wrap">
               <div class="gk-voce">
                 <div class="gk-voce-title">${escapeHtml(es?.titolo || '(esercizio eliminato)')} ${v.override ? '<span class="gk-badge">personalizzata</span>' : ''}</div>
+                <button class="gk-icon-btn" data-action="move-voce" data-b="${bi}" data-v="${vi}" data-dir="-1" ${vi === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
+                <button class="gk-icon-btn" data-action="move-voce" data-b="${bi}" data-v="${vi}" data-dir="1" ${vi === b.voci.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
                 <button class="gk-icon-btn" data-action="toggle-voce" data-b="${bi}" data-v="${vi}" title="Personalizza per questa seduta"><i class="fa-solid fa-sliders"></i></button>
                 <button class="gk-icon-btn danger" data-action="remove-voce" data-b="${bi}" data-v="${vi}"><i class="fa-solid fa-trash"></i></button>
               </div>
@@ -402,6 +404,15 @@ export function render(container) {
     }
     else if (action === 'remove-voce') {
       draft.blocchi[+btn.dataset.b].voci.splice(+btn.dataset.v, 1);
+      drawBlocchi(byId);
+    }
+    else if (action === 'move-voce') {
+      const bi2 = +btn.dataset.b, vi = +btn.dataset.v, dir = +btn.dataset.dir, target = vi + dir;
+      const voci = draft.blocchi[bi2].voci;
+      if (target < 0 || target >= voci.length) return;
+      [voci[vi], voci[target]] = [voci[target], voci[vi]];
+      if (expandedVoce === `${bi2}-${vi}`) expandedVoce = `${bi2}-${target}`;
+      else if (expandedVoce === `${bi2}-${target}`) expandedVoce = `${bi2}-${vi}`;
       drawBlocchi(byId);
     }
     else if (action === 'toggle-voce') {

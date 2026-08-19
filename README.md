@@ -24,28 +24,35 @@ poter tenere entrambi i progetti nello stesso browser senza conflitti).
 ```
 index.html
 css/style.css
+supabase/
+  schema.sql       — da eseguire una volta nel progetto Supabase (vedi supabase/README.md)
+  README.md       — istruzioni di configurazione della sincronizzazione
 js/
-  storage.js       — unico punto di accesso a IndexedDB
+  storage.js       — unico punto di accesso a IndexedDB (soft-delete su remove)
+  data/
+    config.js       — URL/chiave Supabase, mappa store→tabella
+    cloud.js       — fetch verso PostgREST (nessuna libreria esterna)
+    sync.js       — sincronizzazione bidirezionale per data di modifica
   defaults.js       — liste personalizzate di default (scritte solo al primo avvio)
   dom-utils.js       — utility di rendering condivise
   editors.js       — editor condivisi: sequenza di step, materiali con quantità, tag
   modal.js       — modale generico riusabile (azioni di modifica/vedi su desktop)
-  calendar-views.js  — rendering condiviso viste Settimana/Calendario/Elenco
+  calendar-views.js  — rendering condiviso viste Settimana/Calendario/Elenco, trascinamento
   evento-editor.js  — form Evento condiviso tra Stagioni e Calendario allenatore
   dizionario.js       — termini step + gruppi di alternative (unifica/raggruppa/elimina)
   esercizi.js       — CRUD esercizi (titolo, step, materiali, tag, schema — niente parametri)
-  sedute.js       — CRUD sedute (blocchi liberi + voci, personalizzabili per intero)
+  sedute.js       — CRUD sedute (blocchi liberi + voci, riordinabili, personalizzabili per intero)
   stagioni.js       — squadre, stagioni, eventi (allenamento/partita, con orario), ricorrenza
   calendario.js       — "Calendario allenatore": eventi di tutte le stagioni/squadre insieme
   presenze.js       — widget convocati/presenti + storico qualità per portiere
   portieri.js       — anagrafica portieri
-  settings.js       — liste personalizzate + gestione dizionario
+  settings.js       — liste personalizzate + dizionario + backup + sincronizzazione
   ui.js       — guscio/navigazione
   app.js       — entry point
 ```
 
 Ogni modulo espone `render(container)` ed è indipendente dagli altri; solo
-`storage.js` tocca `indexedDB`.
+`storage.js` tocca `indexedDB`, solo `data/cloud.js` parla con Supabase.
 
 ## Modello dati (sintesi)
 

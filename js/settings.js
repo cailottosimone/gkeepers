@@ -9,6 +9,7 @@
 import * as storage from './storage.js';
 import * as dizionario from './dizionario.js';
 import { escapeHtml } from './dom-utils.js';
+import * as sync from './data/sync.js';
 
 const LIST_LABELS = { materiali: ['Materiali', 'fa-box'], gesti: ['Gesti', 'fa-hand'], qualita: ['Qualità', 'fa-bolt'] };
 
@@ -63,10 +64,12 @@ async function rinominaVoceLista(listId, key, nuovaLabel) {
 }
 
 export function render(container) {
-  let tab = 'liste'; // liste | dizionario | backup
+  let tab = 'liste'; // liste | dizionario | backup | sync
   let selectedTermini = [];
   let openListe = null; // quale categoria (materiali/gesti/qualita) è espansa, nessuna di default
   let importPreview = null; // backup letto in attesa di conferma
+  let syncBusy = false;
+  let syncLastResult = null;
 
   async function draw() {
     container.innerHTML = `
@@ -75,12 +78,72 @@ export function render(container) {
         <button class="gk-tab ${tab === 'liste' ? 'active' : ''}" data-action="tab" data-tab="liste"><i class="fa-solid fa-list"></i> Liste personalizzate</button>
         <button class="gk-tab ${tab === 'dizionario' ? 'active' : ''}" data-action="tab" data-tab="dizionario"><i class="fa-solid fa-book"></i> Dizionario step</button>
         <button class="gk-tab ${tab === 'backup' ? 'active' : ''}" data-action="tab" data-tab="backup"><i class="fa-solid fa-box-archive"></i> Backup</button>
+        <button class="gk-tab ${tab === 'sync' ? 'active' : ''}" data-action="tab" data-tab="sync"><i class="fa-solid fa-cloud-arrow-up"></i> Sincronizzazione</button>
       </div>
       <div id="gk-settings-body"></div>
     `;
     if (tab === 'liste') await drawListe();
     else if (tab === 'dizionario') await drawDizionario();
-    else await drawBackup();
+    else if (tab === 'backup') await drawBackup();
+    else await drawSync();
+  }
+
+  async function drawSync() {
+    const body = document.getElementById('gk-settings-body');
+    const enabled = await sync.isSyncEnabled();
+    const { lastSyncAt, lastSyncError } = await sync.lastSyncInfo();
+    body.innerHTML = `
+      <div class="gk-card">
+        <div class="gk-label"><i class="fa-solid fa-cloud"></i>Sincronizzazione cloud</div>
+        <div class="gk-hint" style="margin-bottom:10px">
+          Nessun account: si collega a uno spazio dati condiviso (stesso principio delle altre app).
+          Vince sempre il dato più recente tra locale e cloud, dispositivo per dispositivo — su un
+          dispositivo nuovo, senza dati locali con cui competere, è il cloud a vincere sempre: è così
+          che un dispositivo nuovo si allinea a quello che c'è già salvato.
+        </div>
+        <label class="gk-checkbox-row" style="margin-bottom:10px">
+          <input type="checkbox" id="f-sync-enabled" ${enabled ? 'checked' : ''} />
+          Attiva sincronizzazione cloud
+        </label>
+        ${enabled ? `
+          <div class="gk-hint" style="margin-bottom:10px">
+            Ultima sincronizzazione: ${lastSyncAt ? new Date(lastSyncAt).toLocaleString('it-IT') : 'mai'}.
+            ${lastSyncError ? `<br><span style="color:var(--red)">Ultimo errore: ${escapeHtml(lastSyncError)}</span>` : ''}
+          </div>
+          <button class="gk-btn primary" data-action="sync-now" ${syncBusy ? 'disabled' : ''}>
+            <i class="fa-solid ${syncBusy ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'}"></i>${syncBusy ? 'Sincronizzazione in corso...' : 'Sincronizza ora'}
+          </button>
+          ${syncLastResult ? `
+            <table class="gk-table" style="margin-top:10px">
+              <tr><th>Store</th><th>Scaricati</th><th>Caricati</th></tr>
+              ${Object.entries(syncLastResult).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${v.scaricati}</td><td>${v.caricati}</td></tr>`).join('')}
+            </table>` : ''}
+        ` : ''}
+      </div>
+      <div class="gk-card">
+        <div class="gk-hint">
+          Configurazione richiesta lato Supabase (una volta sola): vedi <code>supabase/schema.sql</code>
+          e <code>supabase/README.md</code> nel pacchetto del progetto.
+        </div>
+      </div>
+    `;
+    document.getElementById('f-sync-enabled').addEventListener('change', async (e) => {
+      await sync.setSyncEnabled(e.target.checked);
+      if (e.target.checked) {
+        syncBusy = true;
+        drawSync();
+        try {
+          syncLastResult = await sync.syncAll();
+        } catch (err) {
+          window.alert('Sincronizzazione non riuscita: ' + err.message);
+        } finally {
+          syncBusy = false;
+          drawSync();
+        }
+      } else {
+        drawSync();
+      }
+    });
   }
 
   async function drawBackup() {
@@ -229,6 +292,19 @@ export function render(container) {
     const action = btn.dataset.action;
 
     if (action === 'tab') { tab = btn.dataset.tab; selectedTermini = []; importPreview = null; draw(); }
+
+    else if (action === 'sync-now') {
+      syncBusy = true;
+      drawSync();
+      try {
+        syncLastResult = await sync.syncAll();
+      } catch (err) {
+        window.alert('Sincronizzazione non riuscita: ' + err.message);
+      } finally {
+        syncBusy = false;
+        drawSync();
+      }
+    }
 
     else if (action === 'export-backup') {
       const data = await storage.exportAll();

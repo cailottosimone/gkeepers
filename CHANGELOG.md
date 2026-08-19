@@ -1,5 +1,68 @@
 # CHANGELOG
 
+## v0.7.0 — 2026-08-18 — Riordino voci, sincronizzazione Supabase
+
+### Riordino esercizi in un blocco
+
+Aggiunte le frecce ↑/↓ alle voci di un blocco in Seduta — stessa logica già
+usata per riordinare gli step di un esercizio, non un meccanismo nuovo.
+Ho scelto le frecce invece del trascinamento (che pure uso già nel
+calendario) perché il drag-and-drop nativo HTML5 funziona solo con il
+mouse: su schermo touch — cioè probabilmente il caso più comune per
+costruire una seduta al campo — non avrebbe funzionato affatto, mentre le
+frecce sono identiche su mobile e desktop.
+
+### Sincronizzazione cloud (Supabase)
+
+Stesso progetto Supabase delle altre app (URL fornito), ma **senza
+login**: nessun account, un unico spazio dati condiviso protetto solo dalla
+policy di accesso — non multi-utente. Differenze rispetto al sistema con
+account visto in repository-portieri:
+
+- **Nessuna schermata di accesso.** Un solo interruttore "Attiva
+  sincronizzazione cloud" in Impostazioni.
+- **Vince il più recente**, record per record, confrontando la data di
+  ultima modifica locale e cloud. Il caso "dispositivo nuovo sovrascritto
+  dal cloud" non è un percorso a parte: è semplicemente cosa succede
+  quando questo stesso confronto avviene con uno storage locale vuoto — il
+  cloud vince sempre perché non c'è nulla in locale con cui competere.
+  Niente più domanda "sei il primo dispositivo o uno successivo?".
+- **Le cancellazioni sono soft-delete**: `storage.remove()` ora marca il
+  record come cancellato invece di eliminarlo fisicamente (`getAll()` lo
+  esclude comunque di default, quindi per il resto della app è come se non
+  esistesse più) — necessario perché una cancellazione possa propagarsi
+  agli altri dispositivi allo stesso modo di qualsiasi altra modifica.
+- **Manuale**, non in tempo reale: si sincronizza attivando l'opzione,
+  premendo "Sincronizza ora", o silenziosamente all'avvio della app se è
+  già attiva (nessun errore mostrato se fallisce in quel momento, "Sincronizza ora" resta sempre disponibile).
+
+Nuovi file: `js/data/{config,cloud,sync}.js`, `supabase/schema.sql` (da
+eseguire una volta nell'SQL Editor di Supabase — crea uno schema dedicato
+`gkeepers`, non tocca gli schemi di altre app), `supabase/README.md` con
+le istruzioni di configurazione.
+
+**Limite dichiarato**: senza login, chiunque avesse la stessa chiave e
+conoscesse lo schema potrebbe leggere/scrivere questi dati — per uso
+personale è un compromesso accettabile, ma vale la pena saperlo (lo dico
+anche nell'interfaccia, non solo qui).
+
+### Verifiche fatte
+
+Non posso raggiungere `supabase.co` da questo ambiente (dominio fuori
+dalla rete consentita per gli strumenti che uso qui) — la connettività
+reale va confermata da un browser vero, con le tue chiavi. Ho invece
+scritto un test dedicato con un finto server PostgREST in memoria (stesso
+contratto dell'API reale: GET restituisce le righe, POST con
+`Prefer: resolution=merge-duplicates` fa upsert) per verificare la
+*logica* di sincronizzazione: scenario "dispositivo nuovo" (locale vuoto
+si allinea al cloud), push di un record solo locale, conflitto risolto a
+favore del più recente in entrambe le direzioni, propagazione di una
+cancellazione come soft-delete, e che un record cancellato non ricompaia
+dopo altri cicli di sync. Più i soliti smoke test mobile/desktop, per
+verificare che il soft-delete non abbia rotto nulla nel resto della app
+(non doveva: `getAll()` filtra i cancellati allo stesso modo di prima,
+quando venivano eliminati fisicamente).
+
 ## v0.6.0 — 2026-08-18 — Trascinamento, backup, layout
 
 1. **Trascinamento eventi**: negli eventi di Stagioni e nel Calendario

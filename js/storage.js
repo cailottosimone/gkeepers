@@ -37,11 +37,14 @@ async function txStore(storeName, mode = 'readonly') {
   return db.transaction(storeName, mode).objectStore(storeName);
 }
 
-export async function getAll(storeName) {
+export async function getAll(storeName, { includeDeleted = false } = {}) {
   const store = await txStore(storeName);
   return new Promise((resolve, reject) => {
     const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
+    req.onsuccess = () => {
+      const all = req.result || [];
+      resolve(includeDeleted ? all : all.filter((r) => !r.deleted));
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -65,13 +68,16 @@ export async function put(storeName, record) {
   });
 }
 
+// Soft delete: marca il record come cancellato invece di rimuoverlo
+// fisicamente. Necessario per la sincronizzazione cloud — una cancellazione
+// deve poter essere "vista" e propagata agli altri dispositivi, cosa
+// impossibile se il record sparisce del tutto. getAll() lo esclude già di
+// default: per il resto dell'app è come se non esistesse più.
 export async function remove(storeName, id) {
-  const store = await txStore(storeName, 'readwrite');
-  return new Promise((resolve, reject) => {
-    const req = store.delete(id);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+  const existing = await get(storeName, id);
+  if (!existing) return true;
+  await put(storeName, { ...existing, deleted: true, updatedAt: now() });
+  return true;
 }
 
 export function uid() {
