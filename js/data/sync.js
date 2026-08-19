@@ -135,14 +135,26 @@ async function pushSettingsIfNeeded() {
   }
 }
 
-async function pullSettings() {
+/** Scarica customLists/profilo dal cloud e li applica in locale.
+ * force=false (default, ciclo di sync normale): applica il cloud solo se il suo `updatedAt` è
+ *   più recente di quello locale (LWW) — comportamento corretto quando entrambi i lati possono
+ *   contenere modifiche reali dell'utente da preservare.
+ * force=true (solo collegamento esplicito "dispositivo successivo", vedi linkPullingFromCloud):
+ *   applica SEMPRE il cloud se una riga esiste, ignorando il confronto per data. Necessario perché
+ *   le liste/il profilo di un dispositivo mai collegato prima hanno un `updatedAt` "fresco" (fissato
+ *   al primo avvio dell'app, vedi storage.js getCustomLists) che le farebbe sembrare più recenti di
+ *   dati cloud reali ma più vecchi, bloccando lo scarico proprio quando l'utente lo ha chiesto
+ *   esplicitamente. Se il cloud non ha ancora nessuna riga, non fa nulla: restano i dati locali
+ *   (anche se sono i default), che il ciclo di sync successivo caricherà sul cloud per seminarlo. */
+async function pullSettings(force = false) {
   const user = getCurrentUser();
   if (!user) return;
 
   const remoteLists = await pullCustomLists(user.id);
   if (remoteLists) {
     const local = await storage.getCustomLists();
-    if (!local.updatedAt || new Date(remoteLists.updatedAt) > new Date(local.updatedAt)) {
+    const shouldApply = force || !local.updatedAt || new Date(remoteLists.updatedAt) > new Date(local.updatedAt);
+    if (shouldApply) {
       // silent: applicare una versione arrivata dal cloud non è una "modifica dell'utente da
       // ripubblicare"; _markSettingsInSync sotto la segna comunque come già allineata.
       await storage.saveCustomLists({ ...remoteLists.value, updatedAt: remoteLists.updatedAt }, { silent: true });
@@ -153,7 +165,8 @@ async function pullSettings() {
   const remoteProfile = await pullProfile(user.id);
   if (remoteProfile) {
     const local = await storage.getProfile();
-    if (!local || !local.updatedAt || new Date(remoteProfile.updatedAt) > new Date(local.updatedAt)) {
+    const shouldApply = force || !local || !local.updatedAt || new Date(remoteProfile.updatedAt) > new Date(local.updatedAt);
+    if (shouldApply) {
       // Il blocco PIN (appLock/pinHash) NON arriva mai dal cloud (cloud.js non lo invia mai):
       // resta sempre quello già presente su questo dispositivo, o disattivato se è il primo
       // collegamento. id/createdAt del profilo restano quelli locali se già esistenti.
@@ -226,11 +239,20 @@ export async function linkPushingLocalData() {
   await doSyncCycle();
 }
 
-/** Dispositivo successivo: scarica tutto ciò che è già sul cloud (da un altro dispositivo). */
+/** Dispositivo successivo: scarica tutto ciò che è già sul cloud (da un altro dispositivo).
+ * Il pull di customLists/profilo è FORZATO (vedi pullSettings) ed eseguito PRIMA di qualunque
+ * altra cosa: se lo si lasciasse al ciclo normale (che invia prima di scaricare), le liste/il
+ * profilo di default appena creati su questo dispositivo (mai toccati dall'utente, ma con un
+ * `updatedAt` "fresco") verrebbero inviati per primi, rischiando di sovrascrivere sul cloud i
+ * dati reali di chi ha già usato l'app altrove — esattamente il contrario di quello che l'utente
+ * ha chiesto scegliendo questa opzione. Se il cloud non ha ancora nessuna riga (nessuno l'ha mai
+ * sincronizzata), pullSettings non fa nulla: restano i default locali, che il ciclo normale
+ * successivo caricherà sul cloud per seminarlo. */
 export async function linkPullingFromCloud() {
   const user = getCurrentUser();
   if (!user) throw new Error('Devi essere autenticato.');
   await storage.setSyncMeta({ linkedUserId: user.id, lastPulledAt: null, settingsPushedAt: {} });
+  await pullSettings(/* force */ true);
   await doSyncCycle();
 }
 

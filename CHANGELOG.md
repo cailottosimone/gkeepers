@@ -3,6 +3,33 @@
 Le voci più recenti sono in cima; lo storico precedente resta sotto e non viene mai cancellato.
 Formato pacchetto di consegna: `repository-portieri-v{X.Y}-{progressivo}.zip` (progressivo univoco, mai sovrascritto).
 
+## snella-v1.0-002 — 2026-08-19
+Fix di un bug di sincronizzazione cloud (solo ramo snella, non applicato a v2.4-001 su richiesta):
+scegliendo esplicitamente "Scarica i dati già presenti sul cloud" (dispositivo successivo), le
+liste configurabili/il profilo di questo dispositivo **potevano non essere sostituiti dai dati
+cloud reali**, e nei casi peggiori **i default locali venivano inviati al cloud prima ancora di
+scaricare**, rischiando di sovrascrivere dati reali di un altro dispositivo.
+
+- Causa: le liste predefinite create al primissimo avvio (prima di qualunque login) ricevono un
+  `updatedAt` "fresco" (il momento di quell'avvio). Il confronto "vince il più recente" tra
+  `js/data/sync.js` e i dati cloud reali (magari sincronizzati giorni/settimane prima da un altro
+  dispositivo) faceva quindi vincere quasi sempre i default locali, anche quando l'utente aveva
+  esplicitamente chiesto di scaricare dal cloud. Inoltre il ciclo di sync normale invia prima di
+  scaricare: sulla scelta "dispositivo successivo" questo poteva inviare i default al cloud
+  ancora prima del vero scarico.
+- Fix: `pullSettings()` accetta ora un parametro `force`; quando il collegamento è "dispositivo
+  successivo" (`linkPullingFromCloud`), lo scarico di liste/profilo è **forzato e incondizionato**
+  (se sul cloud esiste già una riga, sostituisce sempre quella locale, senza confronto per data) ed
+  eseguito **prima** di qualsiasi invio automatico. Se il cloud non ha ancora nessuna riga
+  (nessun dispositivo ha mai sincronizzato), i dati locali restano quelli attuali e vengono
+  caricati sul cloud dal normale ciclo successivo, per seminarlo. "Primo dispositivo" (push) non è
+  stato toccato: era già corretto.
+- Verifica: `node --check` su tutti i file JS del progetto; test funzionali in ambiente Node
+  isolato (storage/cloud/auth simulati) sui due scenari — (a) cloud con dati reali ma più vecchi
+  del default locale: confermato che il cloud sostituisce il default e che zero invii avvengono
+  prima dello scarico; (b) cloud senza nessuna riga: confermato che i locali restano intatti e
+  vengono correttamente inviati per seminare il cloud.
+
 ## snella-v1.0-001 — 2026-08-17 (RAMO STACCATO da v2.4-001)
 Refactor di semplificazione richiesto esplicitamente come **ramo di sviluppo separato**:
 il ramo `v2.4-xxx` originale resta intatto e recuperabile, questo pacchetto (`snella-v1.0-xxx`)
