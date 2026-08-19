@@ -1,19 +1,15 @@
 // app.js — entry point
-// Avvio: monta la UI nel contenitore #app. Tutta la persistenza è IndexedDB.
-import { UI } from "./ui.js";
+import * as storage from './storage.js';
+import { CUSTOM_LISTS_DEFAULTS } from './defaults.js';
+import * as ui from './ui.js';
 
-window.addEventListener("DOMContentLoaded", async () => {
-  const root = document.getElementById("app");
-  const ui = new UI(root);
-  try {
-    await ui.init();
-  } catch (err) {
-    console.error(err);
-    root.innerHTML = `<div class="fatal">
-      <h2>Avvio non riuscito</h2>
-      <p>Apri l'app tramite <b>Live Server</b> (http://), non con doppio clic sul file.
-      I moduli JavaScript e IndexedDB richiedono il protocollo http.</p>
-      <pre>${(err && err.message) || err}</pre>
-    </div>`;
-  }
+async function main() {
+  await storage.ensureDefaults(CUSTOM_LISTS_DEFAULTS);
+  ui.init();
+}
+
+main().catch((err) => {
+  console.error('Errore di avvio GKEEPERS:', err);
+  document.getElementById('gk-content').innerHTML =
+    `<div class="gk-empty">Errore di avvio: ${err.message}. Controlla la console.</div>`;
 });
