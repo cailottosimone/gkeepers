@@ -23,6 +23,7 @@ export async function salvaPortiere(data) {
     dataNascita: data.dataNascita || '',
     stato: data.stato || 'in_salute',
     squadraId: data.squadraId || '',
+    categoriaKey: data.categoriaKey || '',
     note: data.note || '',
     createdAt: data.createdAt || storage.now(),
     updatedAt: storage.now(),
@@ -40,9 +41,18 @@ function statoBadge(stato) {
   return `<span class="gk-stato-badge ${info.cls}"><i class="fa-solid ${info.icon}"></i> ${escapeHtml(info.label)}</span>`;
 }
 
+// Versione compatta per la card in elenco: solo un pallino colorato con
+// l'icona, senza testo — non deve mai contendere spazio al nome. Il testo
+// completo resta nella scheda aperta (form di modifica, già con etichette
+// per esteso).
+function statoDot(stato) {
+  const info = STATI.find((s) => s.key === stato) || STATI[0];
+  return `<span class="gk-stato-dot ${info.cls}" title="${escapeHtml(info.label)}"><i class="fa-solid ${info.icon}"></i></span>`;
+}
+
 export function render(container) {
-  let storicoOpenFor = null;
   let squadre = [];
+  let categorie = [];
   let formTarget = null;
   let usingModal = false;
   let editingId = null;
@@ -61,6 +71,12 @@ export function render(container) {
           <select class="gk-input" id="f-squadra">
             <option value="">— nessuna —</option>
             ${squadre.map((s) => `<option value="${s.id}" ${p.squadraId === s.id ? 'selected' : ''}>${escapeHtml(s.nome)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="gk-field"><label>Categoria</label>
+          <select class="gk-input" id="f-categoria">
+            <option value="">— nessuna —</option>
+            ${categorie.map((c) => `<option value="${c.key}" ${p.categoriaKey === c.key ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
           </select>
         </div>
         <div class="gk-field"><label>Stato</label>
@@ -116,9 +132,9 @@ export function render(container) {
     else document.getElementById('gk-portiere-form-slot').innerHTML = '';
   }
 
-  async function storicoHtml(portiereId) {
+  async function storicoHtml(portiere) {
     const [{ numEventi, conteggi }, gesti, qualita] = await Promise.all([
-      storicoPortiere(portiereId),
+      storicoPortiere(portiere.id),
       storage.get('customLists', 'gesti'),
       storage.get('customLists', 'qualita'),
     ]);
@@ -126,9 +142,10 @@ export function render(container) {
       (gesti?.items || []).concat(qualita?.items || []).find((i) => i.key === key)?.label || key;
     const voci = Object.entries(conteggi).sort((a, b) => b[1] - a[1]);
     return `
+      <div class="gk-section-head"><h2>${escapeHtml(portiere.cognome)} ${escapeHtml(portiere.nome)}</h2></div>
       <div class="gk-card">
         <div class="gk-label"><i class="fa-solid fa-clock-rotate-left"></i>Storico qualità allenate</div>
-        <div class="gk-hint" style="margin-bottom:8px">Calcolato dagli eventi svolti in cui il portiere risulta presente (${numEventi} eventi).</div>
+        <div class="gk-hint" style="margin-bottom:8px">Calcolato dagli eventi svolti in cui il portiere risulta presente (${numEventi} event${numEventi === 1 ? 'o' : 'i'}). Se lo stesso esercizio compare più volte nella stessa seduta (originale + varianti), conta una sola volta.</div>
         ${voci.length === 0 ? '<div class="gk-hint">Ancora nessun dato: mancano eventi svolti con appello.</div>' : `
           <table class="gk-table">
             <tr><th>Gesto/qualità</th><th>Volte allenata</th></tr>
@@ -140,8 +157,10 @@ export function render(container) {
 
   async function draw() {
     squadre = await storage.getAll('squadre');
+    categorie = (await storage.get('customLists', 'categorie'))?.items || [];
     const portieri = await listPortieri();
     const squadraNome = (id) => squadre.find((s) => s.id === id)?.nome;
+    const categoriaLabel = (key) => categorie.find((c) => c.key === key)?.label;
     container.innerHTML = `
       <div class="gk-section-head">
         <h2>Portieri</h2>
@@ -150,28 +169,27 @@ export function render(container) {
       <div id="gk-portiere-form-slot"></div>
       <div class="gk-list gk-grid">
         ${portieri.length === 0 ? `<div class="gk-empty">Nessun portiere in rosa.</div>` : ''}
-        ${portieri.map((p) => `
-          <div class="gk-portiere-block">
-            <div class="gk-list-item">
-              <div>
-                <div class="gk-list-title">${escapeHtml(p.cognome)} ${escapeHtml(p.nome)} ${statoBadge(p.stato)}</div>
-                <div class="gk-list-sub">${squadraNome(p.squadraId) ? escapeHtml(squadraNome(p.squadraId)) : 'Nessuna squadra'}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div>
-              </div>
+        ${portieri.map((p) => {
+          const squadraTesto = squadraNome(p.squadraId) || 'Nessuna squadra';
+          const categoriaTesto = categoriaLabel(p.categoriaKey) || 'Nessuna categoria';
+          return `
+          <div class="gk-list-item gk-portiere-card">
+            <div class="gk-portiere-row">
+              <span class="gk-portiere-name gk-truncate">${escapeHtml(p.cognome)} ${escapeHtml(p.nome)}</span>
+              ${statoDot(p.stato)}
+            </div>
+            <div class="gk-portiere-row">
+              <span class="gk-portiere-sub gk-truncate">${escapeHtml(squadraTesto)} - ${escapeHtml(categoriaTesto)}</span>
               <div class="gk-list-actions">
                 <button class="gk-icon-btn" data-action="storico" data-id="${p.id}" title="Storico qualità"><i class="fa-solid fa-clock-rotate-left"></i></button>
                 <button class="gk-icon-btn" data-action="edit" data-id="${p.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
                 <button class="gk-icon-btn danger" data-action="delete" data-id="${p.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
-            <div id="gk-storico-${p.id}"></div>
           </div>
-        `).join('')}
+        `; }).join('')}
       </div>
     `;
-    if (storicoOpenFor) {
-      const slot = document.getElementById(`gk-storico-${storicoOpenFor}`);
-      if (slot) slot.innerHTML = await storicoHtml(storicoOpenFor);
-    }
   }
 
   async function onFormClick(e) {
@@ -189,6 +207,7 @@ export function render(container) {
         cognome: formTarget.querySelector('#f-cognome').value,
         dataNascita: formTarget.querySelector('#f-data').value,
         squadraId: formTarget.querySelector('#f-squadra').value,
+        categoriaKey: formTarget.querySelector('#f-categoria').value,
         stato: statoRadio ? statoRadio.value : 'in_salute',
         note: formTarget.querySelector('#f-note').value,
       });
@@ -206,8 +225,8 @@ export function render(container) {
     if (action === 'new') { startEdit(null); }
     else if (action === 'edit') { startEdit(await storage.get('portieri', btn.dataset.id)); }
     else if (action === 'storico') {
-      storicoOpenFor = storicoOpenFor === btn.dataset.id ? null : btn.dataset.id;
-      await draw();
+      const portiere = await storage.get('portieri', btn.dataset.id);
+      openModal(async (target) => { target.innerHTML = await storicoHtml(portiere); }, { size: 'md', label: 'Storico qualità' });
     } else if (action === 'delete') {
       if (!window.confirm('Eliminare questo portiere dalla rosa?')) return;
       await eliminaPortiere(btn.dataset.id);

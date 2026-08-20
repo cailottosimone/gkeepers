@@ -84,6 +84,21 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// Codice breve e stabile per uno store (es. "ES-48213") — assegnato una
+// volta alla creazione, mai riassegnato. Non incrementale di proposito:
+// un prefisso per tipo (ES = esercizio, SE = seduta) + 5 cifre casuali,
+// ricontrollate contro quelli già in uso (anche cancellati, per non
+// riassegnare mai lo stesso codice a qualcos'altro).
+export async function generateCode(storeName, prefix) {
+  const all = await getAll(storeName, { includeDeleted: true });
+  const existing = new Set(all.map((r) => r.numero).filter(Boolean));
+  let code;
+  do {
+    code = `${prefix}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;
+  } while (existing.has(code));
+  return code;
+}
+
 export function now() {
   return new Date().toISOString();
 }
@@ -130,6 +145,21 @@ export async function importAll(backup) {
       for (const record of backup.stores[name]) store.put(record);
     }
   });
+}
+
+// Migrazione non distruttiva: assegna un codice a chi ancora non ce l'ha
+// (record creati prima che esistesse questa funzionalità). Sicura da
+// richiamare ad ogni avvio: tocca solo chi ha "numero" mancante.
+export async function ensureCodes() {
+  for (const [storeName, prefix] of [['esercizi', 'ES'], ['sedute', 'SE']]) {
+    const items = await getAll(storeName, { includeDeleted: true });
+    for (const item of items) {
+      if (!item.numero) {
+        item.numero = await generateCode(storeName, prefix);
+        await put(storeName, item);
+      }
+    }
+  }
 }
 
 // Conteggio record per store, usato per l'anteprima prima di confermare

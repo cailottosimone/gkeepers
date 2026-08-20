@@ -60,6 +60,16 @@ export function renderConvocatiPresenti(container, evento, portieri, onChange) {
 // Storico qualità/gesti allenati da un portiere: solo eventi di allenamento,
 // svolti, con appello che lo segna presente. Relazione a senso unico — la
 // Seduta/Esercizio non sa nulla del portiere, qui solo si legge.
+//
+// Conteggio "intelligente": se nella stessa seduta lo stesso esercizio
+// (stesso id) compare più volte — l'originale e/o una o più varianti
+// personalizzate per quella seduta — i suoi gesti/qualità si contano UNA
+// sola volta per quell'evento (è comunque un solo esercizio, riadattato,
+// non un allenamento aggiuntivo). Un esercizio diverso (id diverso) che
+// allena lo stesso gesto/qualità continua a contare a parte, anche se
+// nominalmente allena la stessa cosa: sono due esercizi distinti davvero
+// svolti. Se due varianti dello stesso esercizio hanno gesti/qualità in
+// parte diversi, l'unione dei due entra nel conteggio di quell'evento.
 export async function storicoPortiere(portiereId) {
   const [eventi, sedute, esercizi] = await Promise.all([
     storage.getAll('eventi'), storage.getAll('sedute'), storage.getAll('esercizi'),
@@ -76,12 +86,20 @@ export async function storicoPortiere(portiereId) {
     const seduta = seduteById[ev.sedutaId];
     if (!seduta) continue;
     numEventi++;
+
+    const tagPerEsercizio = new Map(); // esercizioId -> Set di tag, unione tra le sue varianti
     for (const b of seduta.blocchi) {
       for (const v of b.voci) {
         const es = eserciziById[v.esercizioId];
         if (!es) continue;
-        for (const tag of es.tag || []) conteggi[tag] = (conteggi[tag] || 0) + 1;
+        const tagEffettivi = v.override ? v.override.tag : es.tag;
+        if (!tagPerEsercizio.has(v.esercizioId)) tagPerEsercizio.set(v.esercizioId, new Set());
+        const set = tagPerEsercizio.get(v.esercizioId);
+        (tagEffettivi || []).forEach((t) => set.add(t));
       }
+    }
+    for (const set of tagPerEsercizio.values()) {
+      for (const tag of set) conteggi[tag] = (conteggi[tag] || 0) + 1;
     }
   }
   return { numEventi, conteggi };

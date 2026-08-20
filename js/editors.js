@@ -20,7 +20,7 @@ export function mountStepEditor(container, { steps, onChange }) {
     const text = raw.trim();
     if (!text) return;
     const resolved = await dizionario.risolviTermine(text, chosen ? chosen.id : null);
-    steps.push({ id: storage.uid(), label: resolved.label, note: '', ruolo: '', termRef: resolved.termRef });
+    steps.push({ id: storage.uid(), label: resolved.label, note: '', termRef: resolved.termRef });
     emit();
     renderSteps();
   }
@@ -55,38 +55,26 @@ export function mountStepEditor(container, { steps, onChange }) {
     }
     const rows = await Promise.all(steps.map(async (s, i) => {
       const { gruppo, alternative } = await dizionario.alternativePer(s.termRef);
-      const expanded = expandedStep === i;
+      const showAlt = expandedStep === i;
       return `
         <div class="gk-step">
           <div class="gk-step-num">${String(i + 1).padStart(2, '0')}</div>
           <div class="gk-step-body">
             <div class="gk-step-main">
               ${s.termRef ? '<i class="fa-solid fa-link gk-step-link" title="Collegato al dizionario"></i>' : ''}
-              <span class="gk-step-label" data-se-expand="${i}">${escapeHtml(s.label)}</span>
+              <span class="gk-step-label">${escapeHtml(s.label)}</span>
               <div class="gk-step-actions">
                 <button class="gk-icon-btn" data-se-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
                 <button class="gk-icon-btn" data-se-move="${i}" data-dir="1" ${i === steps.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
-                <button class="gk-icon-btn" data-se-expand="${i}"><i class="fa-solid fa-pen"></i></button>
+                ${alternative.length > 0 ? `<button class="gk-icon-btn" data-se-expand="${i}" title="Alternative"><i class="fa-solid fa-shuffle"></i></button>` : ''}
                 <button class="gk-icon-btn danger" data-se-delete="${i}"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
-            ${expanded ? `
-              <div class="gk-step-expand">
-                ${alternative.length > 0 ? `
-                  <div>
-                    <div class="gk-mini-label">Alternative nel gruppo "${escapeHtml(gruppo.nome)}"</div>
-                    <div class="gk-alt-row">
-                      ${alternative.map((a) => `<div class="gk-alt-chip" data-se-alt="${i}" data-term="${a.id}" data-label="${escapeHtml(a.label)}"><i class="fa-solid fa-shuffle"></i>${escapeHtml(a.label)}</div>`).join('')}
-                    </div>
-                  </div>` : ''}
-                <div>
-                  <div class="gk-mini-label">Nota (opzionale)</div>
-                  <input class="gk-input" data-se-note="${i}" value="${escapeHtml(s.note)}" />
-                </div>
-                <div>
-                  <div class="gk-mini-label">Ruolo (solo esercizi multi-portiere)</div>
-                  <input class="gk-input" data-se-ruolo="${i}" placeholder="Es. Porta 1, Porta 2..." value="${escapeHtml(s.ruolo)}" />
-                </div>
+            <input class="gk-input gk-step-note-input" data-se-note="${i}" placeholder="Nota (es. piedi pari, un piede solo...)" value="${escapeHtml(s.note)}" />
+            ${showAlt && alternative.length > 0 ? `
+              <div class="gk-alt-row">
+                <span class="gk-mini-label" style="width:100%">Alternative nel gruppo "${escapeHtml(gruppo.nome)}":</span>
+                ${alternative.map((a) => `<div class="gk-alt-chip" data-se-alt="${i}" data-term="${a.id}" data-label="${escapeHtml(a.label)}"><i class="fa-solid fa-shuffle"></i>${escapeHtml(a.label)}</div>`).join('')}
               </div>` : ''}
           </div>
         </div>
@@ -96,9 +84,6 @@ export function mountStepEditor(container, { steps, onChange }) {
 
     cont.querySelectorAll('[data-se-note]').forEach((inp) => {
       inp.addEventListener('input', (e) => { steps[+e.target.dataset.seNote].note = e.target.value; emit(); });
-    });
-    cont.querySelectorAll('[data-se-ruolo]').forEach((inp) => {
-      inp.addEventListener('input', (e) => { steps[+e.target.dataset.seRuolo].ruolo = e.target.value; emit(); });
     });
     cont.querySelectorAll('[data-se-move]').forEach((btn) => {
       btn.addEventListener('click', () => {

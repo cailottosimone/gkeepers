@@ -4,7 +4,7 @@
 // mostra e permette di aprire eventi di stagioni/squadre diverse).
 
 import * as storage from './storage.js';
-import { escapeHtml, todayISO } from './dom-utils.js';
+import { escapeHtml, todayISO, idPrefix, stepSummary } from './dom-utils.js';
 import { aggregatoSeduta } from './sedute.js';
 import { renderConvocatiPresenti } from './presenze.js';
 
@@ -71,7 +71,7 @@ export function mountEventoForm(target, eventoDraft, { showBackButton = false, o
           <div class="gk-label">Seduta collegata</div>
           <select class="gk-input" id="fe-seduta">
             <option value="">— nessuna, da assegnare dopo —</option>
-            ${sedute.map((s) => `<option value="${s.id}" ${eventoDraft.sedutaId === s.id ? 'selected' : ''}>${escapeHtml(s.titolo)}</option>`).join('')}
+            ${sedute.sort((a, b) => (a.titolo || '').localeCompare(b.titolo || '', 'it')).map((s) => `<option value="${s.id}" ${eventoDraft.sedutaId === s.id ? 'selected' : ''}>${idPrefix(s.numero)}${escapeHtml(s.titolo)}</option>`).join('')}
           </select>
           <div id="gk-seduta-riepilogo"></div>
         </div>
@@ -121,16 +121,16 @@ export function mountEventoForm(target, eventoDraft, { showBackButton = false, o
 
     slot.innerHTML = `
       <div class="gk-riepilogo">
-        <div class="gk-riepilogo-riga"><b>${dettaglioBlocchi.length}</b> blocch${dettaglioBlocchi.length === 1 ? 'o' : 'i'} ·
-          <b>${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0)}</b> esercizi ·
+        <div class="gk-riepilogo-riga"><b>${dettaglioBlocchi.length}</b> bloc${dettaglioBlocchi.length === 1 ? 'co' : 'chi'} ·
+          <b>${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0)}</b> eserciz${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0) === 1 ? 'io' : 'i'} ·
           almeno <b>${numPortieri}</b> portier${numPortieri === 1 ? 'e' : 'i'}</div>
         ${dettaglioBlocchi.map((b) => `
           <div class="gk-riepilogo-blocco">
             <div class="gk-riepilogo-blocco-titolo">${escapeHtml(b.titolo || '(blocco senza titolo)')}</div>
             ${b.voci.map((v) => `
               <div class="gk-riepilogo-esercizio">
-                ${escapeHtml(v.titolo)} ${v.personalizzata ? '<span class="gk-badge">personalizzata</span>' : ''}
-                <div class="gk-riepilogo-steps">${v.steps.map((s) => escapeHtml(s.label)).join(' → ')}</div>
+                ${escapeHtml(v.titolo)} ${v.variante ? '<span class="gk-badge">variante</span>' : ''}
+                <div class="gk-riepilogo-steps">${v.steps.map((s) => stepSummary(s)).join(' → ')}</div>
               </div>
             `).join('')}
           </div>

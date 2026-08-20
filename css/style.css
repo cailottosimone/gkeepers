@@ -110,14 +110,42 @@ textarea.gk-input { resize: vertical; min-height: 40px; }
   padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; gap: 14px;
   box-shadow: var(--shadow);
 }
-.gk-list-title { font-family: 'Oswald', sans-serif; font-size: 15.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 1.4; }
+.gk-list-title { font-family: 'Oswald', sans-serif; font-size: 15.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 1.4; flex: 1; min-width: 0; }
 .gk-list-sub { font-size: 13px; color: var(--chalk-dim); margin-top: 6px; line-height: 1.6; }
 .gk-list-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .gk-thumb { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--line); }
+
+/* Card a due righe (sedute, esercizi): titolo a piena larghezza sopra,
+   sotto le informazioni sintetiche a sinistra e le azioni a destra con più
+   respiro — invece di stringere il titolo contro 3-4 icone sulla stessa riga. */
+.gk-list-item-stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.gk-list-item-stack .gk-list-title { width: 100%; }
+.gk-list-top-row { display: flex; align-items: center; gap: 12px; }
+.gk-list-top-row .gk-list-title { flex: 1; min-width: 0; }
+.gk-list-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gk-list-item-bottom .gk-list-sub { margin-top: 0; flex: 1; min-width: 0; }
+.gk-list-item-bottom .gk-list-actions { gap: 6px; flex-shrink: 0; }
+.gk-list-item-bottom .gk-list-actions .gk-icon-btn { padding: 9px 11px; font-size: 15px; }
 .gk-image-preview { position: relative; display: block; width: 100%; }
 .gk-image-preview img { width: 100%; max-height: 320px; object-fit: contain; background: var(--panel-2); border-radius: 10px; border: 1px solid var(--line); display: block; }
 .gk-image-preview .gk-icon-btn { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,0.9); }
-.gk-portiere-block { margin-bottom: 8px; }
+/* Card portiere: due righe, stesso schema in entrambe — testo a sinistra
+   che tronca con l'ellissi se troppo lungo, elemento fisso a destra.
+   Riga 1: nome + pill di stato. Riga 2: squadra/categoria + azioni. */
+.gk-portiere-card { flex-direction: column; align-items: stretch; gap: 6px; }
+.gk-portiere-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gk-portiere-name {
+  font-family: 'Oswald', sans-serif; font-size: 15.5px; font-weight: 600; min-width: 0;
+}
+.gk-portiere-sub { font-size: 13px; color: var(--chalk-dim); min-width: 0; }
+
+.gk-clickable { cursor: pointer; }
+.gk-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap !important; }
+.gk-variante-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11.5px; color: var(--chalk-dim); padding: 3px 2px;
+}
+.gk-variante-bar .gk-icon-btn { padding: 4px 6px; font-size: 12px; }
 
 .gk-empty { text-align: center; padding: 22px 10px; color: var(--chalk-dim); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; }
 .gk-list.gk-grid .gk-empty { grid-column: 1 / -1; }
@@ -153,6 +181,11 @@ textarea.gk-input { resize: vertical; min-height: 40px; }
 .gk-step-link { color: var(--green); flex-shrink: 0; font-size: 12px; }
 .gk-step-actions { display: flex; gap: 0; flex-shrink: 0; }
 .gk-step-expand { margin-top: 6px; padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
+.gk-step-note-input {
+  margin: 6px 0 0 !important; font-size: 13px; padding: 7px 10px !important;
+  background: var(--bg); border-style: dashed;
+}
+.gk-step-note-input::placeholder { color: var(--chalk-dim); opacity: 0.6; }
 .gk-alt-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 .gk-alt-chip { font-size: 12.5px; padding: 6px 11px; border-radius: 8px; background: var(--green-tint); border: 1px solid rgba(34,122,84,0.3); color: var(--green); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 
@@ -162,6 +195,7 @@ textarea.gk-input { resize: vertical; min-height: 40px; }
 .gk-chevron.open { transform: rotate(180deg); }
 .gk-section-body { padding-top: 12px; }
 .gk-badge { color: var(--amber); font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--amber-tint); font-weight: 600; }
+.gk-id-badge { color: var(--chalk-dim); font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
 
 /* ---------- liste di selezione: righe, non pillole ---------- */
 .gk-opt-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -188,7 +222,14 @@ table.gk-table input[type="checkbox"] { accent-color: var(--amber-solid); width:
 .gk-mat-label { flex: 1; font-size: 13.5px; }
 .gk-mat-qty { width: 64px; flex-shrink: 0; text-align: center; }
 
-.gk-stato-badge { font-size: 10.5px; padding: 2px 8px; border-radius: 6px; margin-left: 6px; vertical-align: middle; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.gk-stato-badge { font-size: 10.5px; padding: 2px 8px; border-radius: 6px; margin-left: 6px; vertical-align: middle; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.gk-stato-dot {
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: 11px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px;
+}
+.gk-stato-dot.ok { color: var(--green); background: var(--green-tint); }
+.gk-stato-dot.danger { color: var(--red); background: var(--red-tint); }
+.gk-stato-dot.warn { color: var(--amber); background: var(--amber-tint); }
 .gk-stato-badge.ok { color: var(--green); background: var(--green-tint); }
 .gk-stato-badge.danger { color: var(--red); background: var(--red-tint); }
 .gk-stato-badge.warn { color: var(--amber); background: var(--amber-tint); }
@@ -297,7 +338,11 @@ table.gk-table input[type="checkbox"] { accent-color: var(--amber-solid); width:
   }
   .gk-nav-btn.active { border-left-color: transparent; border-top-color: var(--amber); }
   .gk-nav-btn i { font-size: 16px; }
+  .gk-nav-btn[data-fold="mobile"] { display: none; } /* raggruppate sotto "Altro" */
   .gk-content { padding-bottom: 78px; }
+}
+@media (min-width: 860px) {
+  .gk-nav-more-btn { display: none; } /* su desktop c'è spazio, tutte le voci restano dirette */
 }
 
 /* ---------- desktop: più respiro, usa lo spazio reale a disposizione ---------- */

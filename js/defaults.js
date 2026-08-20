@@ -32,4 +32,10 @@ export const CUSTOM_LISTS_DEFAULTS = {
     { key: 'equilibrio', label: 'Equilibrio', isDefault: true },
     { key: 'esplosivita', label: 'Esplosività', isDefault: true },
   ],
+  categorie: [
+    { key: 'prima_squadra', label: 'Prima Squadra', isDefault: true },
+    { key: 'juniores', label: 'Juniores', isDefault: true },
+    { key: 'allievi', label: 'Allievi', isDefault: true },
+    { key: 'giovanissimi', label: 'Giovanissimi', isDefault: true },
+  ],
 };

@@ -7,7 +7,7 @@
 // le presenze vivono sull'Evento, non qui.
 
 import * as storage from './storage.js';
-import { escapeHtml, fmtDate } from './dom-utils.js';
+import { escapeHtml, fmtDate, idBadge, idPrefix, debounce, stepSummary } from './dom-utils.js';
 import { mountStepEditor, mountMaterialiEditor, mountTagEditor } from './editors.js';
 import { structuredCloneSafe } from './esercizi.js';
 import { openModal, closeModal, isDesktop } from './modal.js';
@@ -18,12 +18,13 @@ export async function listSedute() {
 }
 
 function emptySeduta() {
-  return { id: null, titolo: '', note: '', blocchi: [] };
+  return { id: null, numero: null, titolo: '', note: '', blocchi: [] };
 }
 
 async function salvaSeduta(draft) {
   const record = {
     id: draft.id || storage.uid(),
+    numero: draft.numero || await storage.generateCode('sedute', 'SE'),
     titolo: draft.titolo.trim(),
     note: draft.note || '',
     blocchi: draft.blocchi,
@@ -50,8 +51,11 @@ export function esercizioEffettivo(esercizio, voce) {
   };
 }
 
-// Aggregazione automatica: materiali (unione, tenendo conto delle
-// personalizzazioni) e portieri implicati (dai ruoli usati negli esercizi).
+// Aggregazione automatica: materiali (il MASSIMO richiesto da un singolo
+// esercizio, non la somma — gli esercizi di una seduta si susseguono, non
+// si sovrappongono, quindi lo stesso pallone/cinesino si riusa da un
+// esercizio all'altro invece di servirne uno in più per ciascuno) e
+// portieri implicati (dai ruoli usati negli esercizi).
 export async function aggregatoSeduta(seduta) {
   const esercizi = await storage.getAll('esercizi');
   const byId = Object.fromEntries(esercizi.map((e) => [e.id, e]));
@@ -65,11 +69,11 @@ export async function aggregatoSeduta(seduta) {
       if (!es) continue;
       const eff = esercizioEffettivo(es, v);
       for (const m of eff.materiali || []) {
-        materiali[m.key] = (materiali[m.key] || 0) + (m.qty || 1);
+        materiali[m.key] = Math.max(materiali[m.key] || 0, m.qty || 1);
       }
       const ruoli = new Set((eff.steps || []).map((s) => s.ruolo).filter(Boolean));
       if (ruoli.size > numPortieri) numPortieri = ruoli.size;
-      voci.push({ titolo: es.titolo, steps: eff.steps, personalizzata: !!v.override });
+      voci.push({ titolo: es.titolo, steps: eff.steps, variante: !!v.override });
     }
     dettaglioBlocchi.push({ titolo: b.titolo, note: b.note, voci });
   }
@@ -106,6 +110,7 @@ export function render(container) {
   let listi = null;
   let formTarget = null;
   let usingModal = false;
+  let searchTerm = '';
 
   async function loadListi() {
     listi = {
@@ -116,30 +121,38 @@ export function render(container) {
   }
 
   async function drawList() {
-    const sedute = await listSedute();
+    const all = await listSedute();
+    const filtered = searchTerm
+      ? all.filter((s) => s.titolo.toLowerCase().includes(searchTerm.toLowerCase())
+          || String(s.numero).includes(searchTerm.replace('#', '')))
+      : all;
     container.innerHTML = `
       <div class="gk-section-head">
         <h2>Sedute</h2>
         <button class="gk-btn primary" data-action="new"><i class="fa-solid fa-plus"></i>Nuova seduta</button>
       </div>
-      <div class="gk-list gk-grid">
-        ${sedute.length === 0 ? `<div class="gk-empty">Nessuna seduta creata.</div>` : ''}
-        ${sedute.map((s) => `
-          <div class="gk-list-item">
-            <div>
-              <div class="gk-list-title">${escapeHtml(s.titolo)}</div>
-              <div class="gk-list-sub">${s.blocchi.length} blocch${s.blocchi.length === 1 ? 'o' : 'i'}, ${s.blocchi.reduce((n, b) => n + b.voci.length, 0)} esercizi</div>
-            </div>
-            <div class="gk-list-actions">
-              <button class="gk-icon-btn" data-action="view" data-id="${s.id}" title="Apri (sola lettura)"><i class="fa-solid fa-eye"></i></button>
-              <button class="gk-icon-btn" data-action="edit" data-id="${s.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
-              <button class="gk-icon-btn" data-action="duplicate" data-id="${s.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
-              <button class="gk-icon-btn danger" data-action="delete" data-id="${s.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+      <input class="gk-input" id="gk-search" placeholder="Cerca per # numero o titolo..." value="${escapeHtml(searchTerm)}" />
+      <div class="gk-list gk-grid" style="margin-top:12px">
+        ${filtered.length === 0 ? `<div class="gk-empty">Nessuna seduta trovata.</div>` : ''}
+        ${filtered.map((s) => `
+          <div class="gk-list-item gk-list-item-stack gk-clickable" data-action="view" data-id="${s.id}">
+            <div class="gk-list-title">${idBadge(s.numero)} ${escapeHtml(s.titolo)}</div>
+            <div class="gk-list-item-bottom">
+              <div class="gk-list-sub">${s.blocchi.length} bloc${s.blocchi.length === 1 ? 'co' : 'chi'}, ${s.blocchi.reduce((n, b) => n + b.voci.length, 0)} eserciz${s.blocchi.reduce((n, b) => n + b.voci.length, 0) === 1 ? 'io' : 'i'}</div>
+              <div class="gk-list-actions">
+                <button class="gk-icon-btn" data-action="edit" data-id="${s.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
+                <button class="gk-icon-btn" data-action="duplicate" data-id="${s.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
+                <button class="gk-icon-btn danger" data-action="delete" data-id="${s.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+              </div>
             </div>
           </div>
         `).join('')}
       </div>
     `;
+    const search = document.getElementById('gk-search');
+    search.addEventListener('input', debounce((e) => { searchTerm = e.target.value; drawList(); }, 250));
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
   }
 
   // ---------- vista sola lettura + quanto è usata ----------
@@ -156,16 +169,16 @@ export function render(container) {
 
       <div class="gk-card">
         <div class="gk-label"><i class="fa-solid fa-list-ol"></i>Contenuto</div>
-        <div class="gk-riepilogo-riga"><b>${dettaglioBlocchi.length}</b> blocch${dettaglioBlocchi.length === 1 ? 'o' : 'i'} ·
-          <b>${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0)}</b> esercizi ·
+        <div class="gk-riepilogo-riga"><b>${dettaglioBlocchi.length}</b> bloc${dettaglioBlocchi.length === 1 ? 'co' : 'chi'} ·
+          <b>${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0)}</b> eserciz${dettaglioBlocchi.reduce((n, b) => n + b.voci.length, 0) === 1 ? 'io' : 'i'} ·
           almeno <b>${numPortieri}</b> portier${numPortieri === 1 ? 'e' : 'i'}</div>
         ${dettaglioBlocchi.map((b) => `
           <div class="gk-riepilogo-blocco">
             <div class="gk-riepilogo-blocco-titolo">${escapeHtml(b.titolo || '(blocco senza titolo)')}</div>
             ${b.voci.map((v) => `
               <div class="gk-riepilogo-esercizio">
-                ${escapeHtml(v.titolo)} ${v.personalizzata ? '<span class="gk-badge">personalizzata</span>' : ''}
-                <div class="gk-riepilogo-steps">${v.steps.map((s) => escapeHtml(s.label)).join(' → ')}</div>
+                ${escapeHtml(v.titolo)} ${v.variante ? '<span class="gk-badge">variante</span>' : ''}
+                <div class="gk-riepilogo-steps">${v.steps.map((s) => stepSummary(s)).join(' → ')}</div>
               </div>
             `).join('')}
           </div>
@@ -276,10 +289,10 @@ export function render(container) {
             return `
             <div class="gk-voce-wrap">
               <div class="gk-voce">
-                <div class="gk-voce-title">${escapeHtml(es?.titolo || '(esercizio eliminato)')} ${v.override ? '<span class="gk-badge">personalizzata</span>' : ''}</div>
+                <div class="gk-voce-title">${es ? idBadge(es.numero) : ''} ${escapeHtml(es?.titolo || '(esercizio eliminato)')} ${v.override ? '<span class="gk-badge">variante</span>' : ''}</div>
                 <button class="gk-icon-btn" data-action="move-voce" data-b="${bi}" data-v="${vi}" data-dir="-1" ${vi === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
                 <button class="gk-icon-btn" data-action="move-voce" data-b="${bi}" data-v="${vi}" data-dir="1" ${vi === b.voci.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
-                <button class="gk-icon-btn" data-action="toggle-voce" data-b="${bi}" data-v="${vi}" title="Personalizza per questa seduta"><i class="fa-solid fa-sliders"></i></button>
+                <button class="gk-icon-btn" data-action="toggle-voce" data-b="${bi}" data-v="${vi}" title="Crea/modifica variante per questa seduta"><i class="fa-solid fa-sliders"></i></button>
                 <button class="gk-icon-btn danger" data-action="remove-voce" data-b="${bi}" data-v="${vi}"><i class="fa-solid fa-trash"></i></button>
               </div>
               ${expandedVoce === key && es ? `<div class="gk-voce-adatta" id="gk-voce-panel-${key}"></div>` : ''}
@@ -289,7 +302,7 @@ export function render(container) {
         <div class="gk-picker-row">
           <select class="gk-input" data-action="picker-select" data-b="${bi}">
             <option value="">+ Aggiungi esercizio al blocco...</option>
-            ${Object.values(byId).map((e) => `<option value="${e.id}">${escapeHtml(e.titolo)}</option>`).join('')}
+            ${Object.values(byId).sort((a, b) => (a.titolo || '').localeCompare(b.titolo || '', 'it')).map((e) => `<option value="${e.id}">${idPrefix(e.numero)}${escapeHtml(e.titolo)}</option>`).join('')}
           </select>
           <button class="gk-icon-btn danger" data-action="remove-blocco" data-b="${bi}" title="Rimuovi blocco"><i class="fa-solid fa-trash"></i> blocco</button>
         </div>
@@ -323,23 +336,25 @@ export function render(container) {
 
   function mountVocePanel(panel, es, v) {
     if (!panel) return;
-    panel.innerHTML = `
-      ${!v.override ? `
-        <button class="gk-btn" data-action="start-override"><i class="fa-solid fa-sliders"></i>Personalizza questo esercizio solo per questa seduta</button>
-      ` : `
-        <div class="gk-hint" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <span>Le modifiche valgono solo per questa seduta — l'esercizio nel catalogo resta invariato.</span>
-          <button class="gk-btn" data-action="reset-override"><i class="fa-solid fa-rotate-left"></i>Ripristina originale</button>
-        </div>
-        <div class="gk-mini-label" style="margin-top:10px">Sequenza</div>
-        <div id="gk-voce-steps"></div>
-        <div class="gk-mini-label" style="margin-top:10px">Materiali</div>
-        <div id="gk-voce-materiali"></div>
-        <div class="gk-mini-label" style="margin-top:10px">Tag</div>
-        <div id="gk-voce-tag"></div>
-      `}
+    const notaHtml = `
       <div class="gk-mini-label" style="margin-top:10px">Nota di adattamento (libera)</div>
       <input class="gk-input" id="gk-voce-nota" placeholder="Es. condizione del portiere, motivo dell'adattamento..." value="${escapeHtml(v.adattamentoNote || '')}" />
+    `;
+    panel.innerHTML = !v.override ? `
+      <button class="gk-btn" data-action="start-override"><i class="fa-solid fa-sliders"></i>Crea una variante di questo esercizio per questa seduta</button>
+      ${notaHtml}
+    ` : `
+      <div class="gk-variante-bar">
+        <span><i class="fa-solid fa-shuffle"></i> Variante di questa seduta</span>
+        <button class="gk-icon-btn" data-action="reset-override" title="Ripristina l'esercizio originale del catalogo"><i class="fa-solid fa-rotate-left"></i></button>
+      </div>
+      <div class="gk-mini-label" style="margin-top:10px">Sequenza</div>
+      <div id="gk-voce-steps"></div>
+      ${notaHtml}
+      <div class="gk-mini-label" style="margin-top:10px">Materiali</div>
+      <div id="gk-voce-materiali"></div>
+      <div class="gk-mini-label" style="margin-top:10px">Tag</div>
+      <div id="gk-voce-tag"></div>
     `;
 
     panel.querySelector('#gk-voce-nota').addEventListener('input', (e) => { v.adattamentoNote = e.target.value; });
@@ -358,7 +373,7 @@ export function render(container) {
     const resetBtn = panel.querySelector('[data-action="reset-override"]');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        if (!window.confirm('Ripristinare la versione originale? Le personalizzazioni per questa seduta andranno perse.')) return;
+        if (!window.confirm('Ripristinare la versione originale? La variante creata per questa seduta andrà persa.')) return;
         v.override = null;
         rerenderVoceOnly();
       });
@@ -440,6 +455,7 @@ export function render(container) {
       const orig = await storage.get('sedute', btn.dataset.id);
       const copy = structuredCloneSafe(orig);
       copy.id = null;
+      copy.numero = null;
       copy.titolo = orig.titolo + ' (copia)';
       startEdit(copy);
     }

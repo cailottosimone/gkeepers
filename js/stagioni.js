@@ -295,7 +295,7 @@ export function render(container) {
     else if (action === 'show-day-events') { await showDayPopup(btn.dataset.date); }
     else if (action === 'cancella-tutti-eventi') {
       const eventi = await listEventi(stagioneCorrente.id);
-      if (!window.confirm(`Eliminare tutti i ${eventi.length} eventi di questa stagione? L'operazione non è reversibile.`)) return;
+      if (!window.confirm(`Eliminare tutti i ${eventi.length} event${eventi.length === 1 ? 'o' : 'i'} di questa stagione? L'operazione non è reversibile.`)) return;
       for (const ev of eventi) await storage.remove('eventi', ev.id);
       drawEventi();
     }

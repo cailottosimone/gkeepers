@@ -1,5 +1,197 @@
 # CHANGELOG
 
+## v0.12.0 — 2026-08-20 — Card riviste da zero, ID non incrementali
+
+1. **Card Esercizi**: tolta del tutto la sequenza di step, tornata a una
+   riga sola con titolo (troncato con "…" se lungo) e i tasti azione — la
+   sequenza restava confusa in una card così compatta, soprattutto ora che
+   le note dei singoli step sono sempre visibili nell'editor.
+2. **ID non più incrementali**: `#1`, `#2`... sostituiti da un codice
+   tipo `ES-48213` per gli esercizi e `SE-90274` per le sedute — prefisso
+   per tipo (leggibile a colpo d'occhio) + 5 cifre casuali, mai
+   sequenziali, mai riassegnate (nemmeno ai cancellati).
+3. **Migrazione**: aggiunta una funzione che assegna il codice ai record
+   creati prima di questa funzionalità (non toccava quelli che già ce
+   l'avevano), eseguita in automatico all'avvio.
+4. **Card Seduta**: tolto il tasto "occhio" — ora l'intera card apre la
+   vista in sola lettura al click; i tasti specifici (Modifica, Duplica,
+   Elimina) restano espliciti e hanno sempre la priorità sul click della
+   card, grazie alla stessa logica di delega degli eventi già in uso
+   altrove.
+5. **Barra "variante"**: compressa da un paragrafo su due righe + bottone
+   esteso a una singola riga sottile con testo breve e bottone a sola
+   icona.
+6. **Card Portiere riscritta da zero**, seguendo lo schema esatto
+   richiesto: riga 1 nome e cognome a sinistra, pill di stato a destra
+   (solo icona, non più cerchio ma forma a pillola); riga 2
+   "Squadra - Categoria" a sinistra, tasti azione a destra. Entrambe le
+   righe troncano con "…" in caso di testo lungo, con lo stesso
+   meccanismo — coerenza garantita indipendentemente dalla lunghezza dei
+   nomi.
+
+### Verifiche fatte
+
+Smoke test esteso: formato del nuovo codice verificato per esercizi e
+sedute, migrazione testata esplicitamente (un record senza codice ne
+riceve uno nel formato corretto, i record che già ce l'avevano restano
+identici), card seduta verificata cliccabile ovunque tranne che sui tasti
+specifici (che restano prioritari), card esercizio verificata a riga
+singola senza sequenza, card portiere verificata riga per riga contro lo
+schema richiesto. Un fallimento isolato di timing durante lo sviluppo
+(non riproducibile su tre esecuzioni consecutive successive) è stato
+verificato e non è un bug dell'applicazione. Rieseguiti anche gli smoke
+test desktop e sync, nessuna regressione.
+
+## v0.11.0 — 2026-08-20 — Card più ordinate
+
+1. **Portieri**: nella card in elenco lo stato non è più un badge con
+   testo (che a volte spezzava il nome, anche dopo poche lettere) — ora è
+   un pallino colorato con solo l'icona, che non contende mai spazio al
+   nome. Il testo per esteso ("In salute", "Infortunato"...) resta dove
+   serve davvero leggerlo: nella scheda aperta per modificare.
+2. **Sedute ed Esercizi**: nuovo layout a due righe — il titolo ha sempre
+   tutta la larghezza della card sopra, sotto una riga con le informazioni
+   sintetiche a sinistra e i 4 pulsanti di azione a destra, con più
+   respiro (tocco più comodo, non più stretti in verticale contro il
+   titolo).
+3. **Card esercizio**: tolte le note dalla card in elenco — con le note
+   sempre visibili sullo step, la sequenza intera in una card compatta
+   diventava confusa. Le note restano ovunque servono davvero: nella
+   costruzione dell'esercizio, nel riepilogo della seduta, nel riepilogo
+   del form evento.
+4. **Variante in seduta**: la nota di adattamento ora compare subito dopo
+   la sequenza, non più in fondo dopo materiali e tag.
+
+### Verifiche fatte
+
+Smoke test esteso con controlli specifici: pallino di stato al posto del
+badge testuale nella card portiere (badge testuale confermato assente
+lì), nuovo layout a due righe per sedute ed esercizi con le azioni sulla
+riga inferiore, note confermate assenti dalla card esercizio, posizione
+della nota verificata (dopo la sequenza, prima di materiali) nel pannello
+variante. Rieseguiti anche gli smoke test desktop e sync, nessuna
+regressione.
+
+## v0.10.0 — 2026-08-20 — Aggregazioni intelligenti, "variante", storico in modale
+
+1. **Materiali della seduta: il massimo, non la somma**. Due esercizi nello
+   stesso blocco che usano 3 e 5 palloni servivano prima 8 palloni
+   nell'aggregato — sbagliato, gli esercizi si susseguono, non si
+   sovrappongono: gli stessi palloni si riusano da un esercizio all'altro.
+   Ora il totale è il massimo richiesto da un singolo esercizio (5, in
+   quell'esempio), calcolato su tutta la seduta (non solo per blocco,
+   visto che anche i blocchi si susseguono).
+2. **"personalizzata" → "variante"**, ovunque: badge nella voce, nel
+   riepilogo seduta, nel riepilogo del form evento, testo dei pulsanti
+   ("Crea una variante di questo esercizio per questa seduta" invece di
+   "Personalizza..."), messaggio di conferma del ripristino.
+3. **Storico qualità: conteggio consapevole delle varianti**. Prima, ogni
+   voce contava i suoi gesti/qualità per conto proprio — se lo stesso
+   esercizio compariva più volte nella stessa seduta (originale + una o
+   più varianti), la stessa qualità veniva contata più volte come se
+   fossero allenamenti distinti. Ora le varianti dello STESSO esercizio
+   (stesso id) si uniscono: l'insieme dei loro gesti/qualità conta una
+   volta sola per quella seduta. Un esercizio DIVERSO (id diverso) che
+   allena lo stesso gesto continua a contare a parte, perché è davvero un
+   esercizio in più svolto. Esempio verificato: due varianti dello stesso
+   esercizio, una con Equilibrio+Coordinazione, l'altra con
+   Reattività+Coordinazione, più un esercizio diverso con Coordinazione →
+   risultato Equilibrio 1, Reattività 1, Coordinazione 2 (una per il
+   gruppo di varianti, una per l'esercizio a parte).
+4. **Storico qualità: ora è sempre un modale**, non più una scheda che si
+   espande dentro la card del portiere.
+
+### Verifiche fatte
+
+Aggiunti test mirati che costruiscono lo scenario esatto descritto (due
+esercizi con materiali diversi nello stesso blocco; due varianti dello
+stesso esercizio con gesti/qualità in parte sovrapposti più un esercizio
+indipendente) e verificano il risultato numerico preciso, non solo che il
+codice giri senza errori. Confermato lo storico in modale. Rieseguiti
+anche gli smoke test desktop e sync, nessuna regressione.
+
+## v0.9.0 — 2026-08-19 — ID, note evidenti, categorie, correzioni
+
+1. **"bloccho" → "blocco"**: non era un problema di plurale/singolare in
+   sé (quello lo avevo gestito bene), ma un errore letterale — lo stem
+   usato era "blocch" + "o" = "bloccho". Corretto in tutti e tre i punti:
+   lo stem giusto è "bloc" + "co"/"chi".
+2. **ID per esercizi e sedute**: nuovo numero breve e stabile (#1, #2...),
+   assegnato una volta alla creazione e mai riassegnato (nemmeno ai
+   cancellati), mostrato come `#N - Titolo` negli elenchi e nei selettori
+   (scelta esercizio in un blocco, scelta seduta in un evento) — per
+   trovarle quando sono tante, senza dover ricordare il nome esatto. La
+   ricerca funziona anche digitando solo il numero. Duplicare un
+   esercizio/seduta assegna un numero nuovo, non riusa quello originale.
+3. **Step: "ruolo" rimosso, nota sempre evidente**: tolto il campo ruolo
+   dall'editor step (non serviva). La nota non è più nascosta dietro un
+   click per espandere: è un campo sempre visibile subito sotto lo step —
+   pensato per il caso che mi hai descritto, riusare lo stesso esercizio
+   più volte in una seduta cambiando solo la nota ("piedi pari", "un piede
+   solo"...). Aggiunto anche un campo Note a livello di esercizio intero
+   (non solo per singolo step).
+4. **Le note ora si vedono anche nei riepiloghi compatti**: prima, guardando
+   la sequenza di una voce personalizzata dalla vista Seduta o dal form
+   Evento, si vedevano solo le etichette degli step — due step con la
+   stessa etichetta ma note diverse risultavano indistinguibili. Ora il
+   riepilogo mostra "Scaletta *(piedi pari)*" invece di solo "Scaletta",
+   in tutti e tre i punti dove la sequenza viene riassunta (elenco
+   esercizi, riepilogo seduta, riepilogo nel form evento).
+5. **Categorie**: nuova lista personalizzabile in Impostazioni (Prima
+   Squadra, Juniores, Allievi, Giovanissimi di default, come le altre
+   liste — rinominabile, eliminabile con avviso se in uso), assegnabile a
+   ogni portiere.
+6. **Card portiere: nome e badge di stato ora coerenti**: prima un nome
+   corto restava in linea col badge, uno più lungo andava a capo
+   allungando la card in modo incoerente da un portiere all'altro. Ora
+   nome e badge stanno sempre sulla stessa riga: il nome tronca con "…" se
+   troppo lungo, il badge resta fisso a destra — stesso comportamento per
+   tutti, indipendentemente dalla lunghezza del nome.
+
+### Verifiche fatte
+
+Smoke test mobile esteso con controlli specifici per ciascun punto:
+numero assegnato e mostrato correttamente, numero nuovo dopo duplicazione
+(nessun doppione), assenza del campo ruolo, presenza del campo nota
+sempre visibile (sia nel catalogo sia nella personalizzazione in seduta),
+nota effettivamente visibile nel riepilogo compatto, lista Categorie con
+le voci di default, categoria salvata e mostrata sul portiere, nome e
+badge sulla stessa riga strutturale. Rieseguiti anche gli smoke test
+desktop e sync, nessuna regressione.
+
+## v0.8.0 — 2026-08-19 — Sync automatico, nav mobile snellita, correzioni
+
+1. **Aggiornamento automatico**: la sincronizzazione non parte più solo al
+   click su "Sincronizza ora" — un tentativo silenzioso all'avvio, uno
+   periodico (ogni 60 secondi) mentre la app resta aperta, e uno quando
+   torna in primo piano (cambio scheda/app). La vista che stai guardando si
+   aggiorna da sola quando arrivano dati nuovi — **a meno che tu non stia
+   scrivendo in un campo o non abbia un modale di modifica aperto**: in quel
+   caso il refresh automatico si ferma, apposta, per non farti perdere una
+   modifica in corso.
+2. **"Il singolare di blocchi è blocco"**: trovato. Non era "blocco/blocchi"
+   in sé (quello lo avevo già gestito bene) — era "esercizi", scritto
+   sempre al plurale nella stessa riga, anche con un solo esercizio. Corretto
+   in tre punti (riepilogo seduta, riepilogo nel form evento, elenco
+   sedute), più due casi analoghi trovati cercando lo stesso tipo di
+   errore ("eventi" sempre al plurale nel dialogo di "cancella tutti" e
+   nello storico portiere).
+3. **Nav mobile snellita**: sei sezioni in una bottom bar le rendevano
+   tutte piccole e strette. Ora la barra mostra le quattro più usate
+   (Esercizi, Sedute, Calendario, Portieri) più una voce "Altro" che apre
+   un popup con Stagioni e Impostazioni — un tap in più per le due sezioni
+   meno frequenti, ma le altre quattro tornano leggibili. Su desktop,
+   dove lo spazio in verticale non manca, la sidebar continua a mostrarle
+   tutte e sei dirette.
+
+### Verifiche fatte
+
+Smoke test mobile esteso: il popup "Altro" elenca correttamente le due
+sezioni ripiegate e naviga bene; `refreshIfSafe()` verificato in entrambi
+i casi (con un campo attivo non tocca nulla, senza un campo attivo
+aggiorna la vista). Rieseguiti anche gli smoke test desktop e sync, nessuna
+regressione.
+
 ## v0.7.0 — 2026-08-18 — Riordino voci, sincronizzazione Supabase
 
 ### Riordino esercizi in un blocco

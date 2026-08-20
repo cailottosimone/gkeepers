@@ -11,18 +11,33 @@ import * as dizionario from './dizionario.js';
 import { escapeHtml } from './dom-utils.js';
 import * as sync from './data/sync.js';
 
-const LIST_LABELS = { materiali: ['Materiali', 'fa-box'], gesti: ['Gesti', 'fa-hand'], qualita: ['Qualità', 'fa-bolt'] };
+const LIST_LABELS = {
+  materiali: ['Materiali', 'fa-box'],
+  gesti: ['Gesti', 'fa-hand'],
+  qualita: ['Qualità', 'fa-bolt'],
+  categorie: ['Categorie', 'fa-layer-group'],
+};
+
+// Dove/come ogni lista è referenziata altrove — usato per calcolare quante
+// volte una voce è in uso e per ripulire i riferimenti quando viene
+// eliminata. "objects": array di {key,...} (materiali con quantità).
+// "array": array di key (tag). "scalar": un solo valore (categoria del
+// portiere).
+const LIST_USAGE = {
+  materiali: { store: 'esercizi', field: 'materiali', type: 'objects' },
+  gesti: { store: 'esercizi', field: 'tag', type: 'array' },
+  qualita: { store: 'esercizi', field: 'tag', type: 'array' },
+  categorie: { store: 'portieri', field: 'categoriaKey', type: 'scalar' },
+};
 
 async function contaUsoVoceLista(listId, key) {
-  const esercizi = await storage.getAll('esercizi');
-  const field = listId === 'materiali' ? 'materiali' : 'tag';
+  const usage = LIST_USAGE[listId];
+  const items = await storage.getAll(usage.store);
   let count = 0;
-  for (const es of esercizi) {
-    if (field === 'materiali') {
-      if ((es.materiali || []).some((m) => m.key === key)) count++;
-    } else {
-      if ((es.tag || []).includes(key)) count++;
-    }
+  for (const it of items) {
+    if (usage.type === 'objects') { if ((it[usage.field] || []).some((m) => m.key === key)) count++; }
+    else if (usage.type === 'array') { if ((it[usage.field] || []).includes(key)) count++; }
+    else if (usage.type === 'scalar') { if (it[usage.field] === key) count++; }
   }
   return count;
 }
@@ -31,21 +46,23 @@ async function eliminaVoceLista(listId, key) {
   const list = await storage.get('customLists', listId);
   if (!list) return;
   await storage.put('customLists', { ...list, items: list.items.filter((i) => i.key !== key), updatedAt: storage.now() });
-  const esercizi = await storage.getAll('esercizi');
-  const field = listId === 'materiali' ? 'materiali' : 'tag';
-  for (const es of esercizi) {
+  const usage = LIST_USAGE[listId];
+  const items = await storage.getAll(usage.store);
+  for (const it of items) {
     let changed = false;
     let value;
-    if (field === 'materiali') {
-      const filtered = (es.materiali || []).filter((m) => m.key !== key);
-      changed = filtered.length !== (es.materiali || []).length;
+    if (usage.type === 'objects') {
+      const filtered = (it[usage.field] || []).filter((m) => m.key !== key);
+      changed = filtered.length !== (it[usage.field] || []).length;
       value = filtered;
-    } else {
-      const filtered = (es.tag || []).filter((t) => t !== key);
-      changed = filtered.length !== (es.tag || []).length;
+    } else if (usage.type === 'array') {
+      const filtered = (it[usage.field] || []).filter((t) => t !== key);
+      changed = filtered.length !== (it[usage.field] || []).length;
       value = filtered;
+    } else if (usage.type === 'scalar') {
+      if (it[usage.field] === key) { changed = true; value = ''; }
     }
-    if (changed) await storage.put('esercizi', { ...es, [field]: value, updatedAt: storage.now() });
+    if (changed) await storage.put(usage.store, { ...it, [usage.field]: value, updatedAt: storage.now() });
   }
 }
 
@@ -195,6 +212,7 @@ export function render(container) {
       materiali: await storage.get('customLists', 'materiali'),
       gesti: await storage.get('customLists', 'gesti'),
       qualita: await storage.get('customLists', 'qualita'),
+      categorie: await storage.get('customLists', 'categorie'),
     };
     body.innerHTML = Object.entries(LIST_LABELS).map(([listId, [label, icon]]) => `
       <div class="gk-card">

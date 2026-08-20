@@ -4,7 +4,7 @@
 // costruire in seguito). Nessun parametro di serie/tempistiche.
 
 import * as storage from './storage.js';
-import { escapeHtml, debounce, resizeImageFile } from './dom-utils.js';
+import { escapeHtml, debounce, resizeImageFile, idBadge } from './dom-utils.js';
 import { mountStepEditor, mountMaterialiEditor, mountTagEditor } from './editors.js';
 import { openModal, closeModal, isDesktop } from './modal.js';
 
@@ -14,13 +14,15 @@ export async function listEsercizi() {
 }
 
 export function emptyEsercizio() {
-  return { id: null, titolo: '', steps: [], materiali: [], tag: [], schemaLink: '', schemaImage: '' };
+  return { id: null, numero: null, titolo: '', note: '', steps: [], materiali: [], tag: [], schemaLink: '', schemaImage: '' };
 }
 
 export async function salvaEsercizio(draft) {
   const record = {
     id: draft.id || storage.uid(),
+    numero: draft.numero || await storage.generateCode('esercizi', 'ES'),
     titolo: draft.titolo.trim(),
+    note: draft.note || '',
     steps: draft.steps,
     materiali: draft.materiali,
     tag: draft.tag,
@@ -57,6 +59,7 @@ export function render(container) {
     const all = await listEsercizi();
     const filtered = searchTerm
       ? all.filter((e) => e.titolo.toLowerCase().includes(searchTerm.toLowerCase())
+          || String(e.numero).includes(searchTerm.replace('#', ''))
           || (e.steps || []).some((s) => s.label.toLowerCase().includes(searchTerm.toLowerCase())))
       : all;
 
@@ -65,16 +68,13 @@ export function render(container) {
         <h2>Esercizi</h2>
         <button class="gk-btn primary" data-action="new"><i class="fa-solid fa-plus"></i>Nuovo esercizio</button>
       </div>
-      <input class="gk-input" id="gk-search" placeholder="Cerca per titolo o step..." value="${escapeHtml(searchTerm)}" />
+      <input class="gk-input" id="gk-search" placeholder="Cerca per # numero, titolo o step..." value="${escapeHtml(searchTerm)}" />
       <div class="gk-list gk-grid" style="margin-top:12px">
         ${filtered.length === 0 ? `<div class="gk-empty">Nessun esercizio trovato.</div>` : ''}
         ${filtered.map((e) => `
           <div class="gk-list-item">
             ${e.schemaImage ? `<img class="gk-thumb" src="${e.schemaImage}" alt="" />` : ''}
-            <div style="flex:1;min-width:0">
-              <div class="gk-list-title">${escapeHtml(e.titolo)}</div>
-              <div class="gk-list-sub">${(e.steps || []).map((s) => escapeHtml(s.label)).join(' → ')}</div>
-            </div>
+            <div class="gk-list-title">${idBadge(e.numero)}<span class="gk-truncate" style="flex:1;min-width:0">${escapeHtml(e.titolo)}</span></div>
             <div class="gk-list-actions">
               <button class="gk-icon-btn" data-action="edit" data-id="${e.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
               <button class="gk-icon-btn" data-action="duplicate" data-id="${e.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
@@ -123,6 +123,8 @@ export function render(container) {
       <div class="gk-card">
         <div class="gk-label">Titolo</div>
         <input class="gk-input gk-title-input" id="f-titolo" placeholder="Es. Circuito presa e tuffi" value="${escapeHtml(draft.titolo)}" />
+        <div class="gk-label" style="margin-top:12px">Note</div>
+        <textarea class="gk-input" id="f-esercizio-note" rows="2" placeholder="Note generali sull'esercizio (opzionale)">${escapeHtml(draft.note)}</textarea>
       </div>
 
       <div class="gk-card">
@@ -144,6 +146,9 @@ export function render(container) {
     formTarget.querySelector('#f-titolo').addEventListener('input', (e) => {
       draft.titolo = e.target.value;
       refreshSaveState();
+    });
+    formTarget.querySelector('#f-esercizio-note').addEventListener('input', (e) => {
+      draft.note = e.target.value;
     });
 
     mountStepEditor(formTarget.querySelector('#gk-step-editor'), {
@@ -271,6 +276,7 @@ export function render(container) {
       const orig = await storage.get('esercizi', btn.dataset.id);
       const copy = structuredCloneSafe(orig);
       copy.id = null;
+      copy.numero = null;
       copy.titolo = orig.titolo + ' (copia)';
       startEdit(copy);
     }

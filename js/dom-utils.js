@@ -77,3 +77,22 @@ export function debounce(fn, ms) {
 export function qs(root, sel) {
   return root.querySelector(sel);
 }
+
+// #ID breve e stabile per esercizi/sedute — vedi storage.nextNumero().
+// idBadge: per titoli in elenco (HTML). idPrefix: per <option> di un
+// <select>, che non può contenere markup.
+export function idBadge(numero) {
+  return numero ? `<span class="gk-id-badge">#${numero}</span>` : '';
+}
+export function idPrefix(numero) {
+  return numero ? `#${numero} - ` : '';
+}
+
+// Uno step con la sua nota, se c'è — usato ovunque la sequenza venga
+// mostrata come riassunto: due step con la stessa label ma note diverse
+// (es. "Scaletta" con "piedi pari" vs "un piede solo") devono restare
+// distinguibili anche in un riepilogo compatto, non solo aprendo l'editor.
+export function stepSummary(s) {
+  const label = escapeHtml(s.label);
+  return s.note ? `${label} <i>(${escapeHtml(s.note)})</i>` : label;
+}
