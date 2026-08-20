@@ -24,7 +24,7 @@ function emptySeduta() {
 async function salvaSeduta(draft) {
   const record = {
     id: draft.id || storage.uid(),
-    numero: draft.numero || await storage.generateCode('sedute', 'SE'),
+    numero: draft.numero || await storage.generateCode('sedute', 'SD'),
     titolo: draft.titolo.trim(),
     note: draft.note || '',
     blocchi: draft.blocchi,
@@ -124,30 +124,32 @@ export function render(container) {
     const all = await listSedute();
     const filtered = searchTerm
       ? all.filter((s) => s.titolo.toLowerCase().includes(searchTerm.toLowerCase())
-          || String(s.numero).includes(searchTerm.replace('#', '')))
+          || String(s.numero).toLowerCase().includes(searchTerm.toLowerCase().replace('#', '')))
       : all;
     container.innerHTML = `
       <div class="gk-section-head">
         <h2>Sedute</h2>
         <button class="gk-btn primary" data-action="new"><i class="fa-solid fa-plus"></i>Nuova seduta</button>
       </div>
-      <input class="gk-input" id="gk-search" placeholder="Cerca per # numero o titolo..." value="${escapeHtml(searchTerm)}" />
-      <div class="gk-list gk-grid" style="margin-top:12px">
-        ${filtered.length === 0 ? `<div class="gk-empty">Nessuna seduta trovata.</div>` : ''}
-        ${filtered.map((s) => `
-          <div class="gk-list-item gk-list-item-stack gk-clickable" data-action="view" data-id="${s.id}">
-            <div class="gk-list-title">${idBadge(s.numero)} ${escapeHtml(s.titolo)}</div>
-            <div class="gk-list-item-bottom">
-              <div class="gk-list-sub">${s.blocchi.length} bloc${s.blocchi.length === 1 ? 'co' : 'chi'}, ${s.blocchi.reduce((n, b) => n + b.voci.length, 0)} eserciz${s.blocchi.reduce((n, b) => n + b.voci.length, 0) === 1 ? 'io' : 'i'}</div>
-              <div class="gk-list-actions">
+      <input class="gk-input" id="gk-search" placeholder="Cerca per # codice o titolo..." value="${escapeHtml(searchTerm)}" />
+      ${filtered.length === 0 ? `<div class="gk-empty" style="margin-top:12px">Nessuna seduta trovata.</div>` : `
+        <div class="gk-rows" style="margin-top:12px">
+          ${filtered.map((s) => {
+            const numEsercizi = s.blocchi.reduce((n, b) => n + b.voci.length, 0);
+            return `
+            <div class="gk-row gk-clickable" data-action="view" data-id="${s.id}">
+              <span class="gk-row-title">${escapeHtml(s.titolo)}</span>
+              <span class="gk-row-sub">${s.blocchi.length} bloc${s.blocchi.length === 1 ? 'co' : 'chi'}, ${numEsercizi} eserciz${numEsercizi === 1 ? 'io' : 'i'}</span>
+              <span class="gk-row-id">#${escapeHtml(s.numero || '')}</span>
+              <div class="gk-row-actions">
                 <button class="gk-icon-btn" data-action="edit" data-id="${s.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
                 <button class="gk-icon-btn" data-action="duplicate" data-id="${s.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
                 <button class="gk-icon-btn danger" data-action="delete" data-id="${s.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
-          </div>
-        `).join('')}
-      </div>
+          `; }).join('')}
+        </div>
+      `}
     `;
     const search = document.getElementById('gk-search');
     search.addEventListener('input', debounce((e) => { searchTerm = e.target.value; drawList(); }, 250));
@@ -208,7 +210,7 @@ export function render(container) {
     if (isDesktop()) {
       openModal((target) => { target.innerHTML = html; }, { size: 'lg', label: 'Dettaglio seduta' });
     } else {
-      container.innerHTML = `<button class="gk-btn" data-action="back" style="margin-bottom:12px"><i class="fa-solid fa-arrow-left"></i>Elenco</button>` + html;
+      container.innerHTML = `<button class="gk-btn" data-action="back-view" style="margin-bottom:12px"><i class="fa-solid fa-arrow-left"></i>Elenco</button>` + html;
     }
   }
 
@@ -464,7 +466,7 @@ export function render(container) {
       await eliminaSeduta(btn.dataset.id);
       drawList();
     }
-    else if (action === 'back' && !isDesktop()) { drawList(); }
+    else if (action === 'back-view') { drawList(); }
     else if (!usingModal) { await onFormClick(e); }
   });
 

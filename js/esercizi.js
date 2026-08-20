@@ -4,7 +4,7 @@
 // costruire in seguito). Nessun parametro di serie/tempistiche.
 
 import * as storage from './storage.js';
-import { escapeHtml, debounce, resizeImageFile, idBadge } from './dom-utils.js';
+import { escapeHtml, debounce, resizeImageFile, stepSummary } from './dom-utils.js';
 import { mountStepEditor, mountMaterialiEditor, mountTagEditor } from './editors.js';
 import { openModal, closeModal, isDesktop } from './modal.js';
 
@@ -59,7 +59,7 @@ export function render(container) {
     const all = await listEsercizi();
     const filtered = searchTerm
       ? all.filter((e) => e.titolo.toLowerCase().includes(searchTerm.toLowerCase())
-          || String(e.numero).includes(searchTerm.replace('#', ''))
+          || String(e.numero).toLowerCase().includes(searchTerm.toLowerCase().replace('#', ''))
           || (e.steps || []).some((s) => s.label.toLowerCase().includes(searchTerm.toLowerCase())))
       : all;
 
@@ -68,26 +68,69 @@ export function render(container) {
         <h2>Esercizi</h2>
         <button class="gk-btn primary" data-action="new"><i class="fa-solid fa-plus"></i>Nuovo esercizio</button>
       </div>
-      <input class="gk-input" id="gk-search" placeholder="Cerca per # numero, titolo o step..." value="${escapeHtml(searchTerm)}" />
-      <div class="gk-list gk-grid" style="margin-top:12px">
-        ${filtered.length === 0 ? `<div class="gk-empty">Nessun esercizio trovato.</div>` : ''}
-        ${filtered.map((e) => `
-          <div class="gk-list-item">
-            ${e.schemaImage ? `<img class="gk-thumb" src="${e.schemaImage}" alt="" />` : ''}
-            <div class="gk-list-title">${idBadge(e.numero)}<span class="gk-truncate" style="flex:1;min-width:0">${escapeHtml(e.titolo)}</span></div>
-            <div class="gk-list-actions">
-              <button class="gk-icon-btn" data-action="edit" data-id="${e.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
-              <button class="gk-icon-btn" data-action="duplicate" data-id="${e.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
-              <button class="gk-icon-btn danger" data-action="delete" data-id="${e.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+      <input class="gk-input" id="gk-search" placeholder="Cerca per # codice, titolo o step..." value="${escapeHtml(searchTerm)}" />
+      ${filtered.length === 0 ? `<div class="gk-empty" style="margin-top:12px">Nessun esercizio trovato.</div>` : `
+        <div class="gk-rows" style="margin-top:12px">
+          ${filtered.map((e) => `
+            <div class="gk-row gk-clickable" data-action="view" data-id="${e.id}">
+              ${e.schemaImage ? `<img class="gk-thumb" src="${e.schemaImage}" alt="" />` : ''}
+              <span class="gk-row-title">${escapeHtml(e.titolo)}</span>
+              <span class="gk-row-id">#${escapeHtml(e.numero || '')}</span>
+              <div class="gk-row-actions">
+                <button class="gk-icon-btn" data-action="edit" data-id="${e.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
+                <button class="gk-icon-btn" data-action="duplicate" data-id="${e.id}" title="Usa come punto di partenza"><i class="fa-solid fa-copy"></i></button>
+                <button class="gk-icon-btn danger" data-action="delete" data-id="${e.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+              </div>
             </div>
-          </div>
-        `).join('')}
-      </div>
+          `).join('')}
+        </div>
+      `}
     `;
     const search = document.getElementById('gk-search');
     search.addEventListener('input', debounce((e) => { searchTerm = e.target.value; drawList(); }, 250));
     search.focus();
     search.setSelectionRange(search.value.length, search.value.length);
+  }
+
+  // ---------- vista sola lettura ----------
+  async function viewEsercizio(es) {
+    const [materialiList, gesti, qualita] = await Promise.all([
+      storage.get('customLists', 'materiali'),
+      storage.get('customLists', 'gesti'),
+      storage.get('customLists', 'qualita'),
+    ]);
+    const labelMat = (key) => materialiList?.items?.find((m) => m.key === key)?.label || key;
+    const labelTag = (key) => (gesti?.items || []).concat(qualita?.items || []).find((t) => t.key === key)?.label || key;
+
+    const html = `
+      <div class="gk-section-head"><h2>${escapeHtml(es.titolo)}</h2></div>
+      ${es.schemaImage ? `<div class="gk-card"><img src="${es.schemaImage}" alt="" style="width:100%;border-radius:10px" /></div>` : ''}
+      ${es.note ? `<div class="gk-card"><div class="gk-label"><i class="fa-solid fa-note-sticky"></i>Note</div>${escapeHtml(es.note)}</div>` : ''}
+      <div class="gk-card">
+        <div class="gk-label"><i class="fa-solid fa-list-ol"></i>Sequenza</div>
+        <div class="gk-riepilogo-steps">${(es.steps || []).map((s) => stepSummary(s)).join(' → ')}</div>
+      </div>
+      ${es.materiali?.length ? `
+        <div class="gk-card">
+          <div class="gk-label"><i class="fa-solid fa-box"></i>Materiali</div>
+          ${es.materiali.map((m) => `${escapeHtml(labelMat(m.key))} ×${m.qty}`).join(', ')}
+        </div>` : ''}
+      ${es.tag?.length ? `
+        <div class="gk-card">
+          <div class="gk-label"><i class="fa-solid fa-tags"></i>Tag</div>
+          ${es.tag.map((t) => escapeHtml(labelTag(t))).join(', ')}
+        </div>` : ''}
+      ${es.schemaLink ? `
+        <div class="gk-card">
+          <div class="gk-label"><i class="fa-solid fa-link"></i>Link</div>
+          <a href="${escapeHtml(es.schemaLink)}" target="_blank" rel="noopener">${escapeHtml(es.schemaLink)}</a>
+        </div>` : ''}
+    `;
+    if (isDesktop()) {
+      openModal((target) => { target.innerHTML = html; }, { size: 'lg', label: 'Dettaglio esercizio' });
+    } else {
+      container.innerHTML = `<button class="gk-btn" data-action="back-view" style="margin-bottom:12px"><i class="fa-solid fa-arrow-left"></i>Elenco</button>` + html;
+    }
   }
 
   function startEdit(esOrNull) {
@@ -271,6 +314,7 @@ export function render(container) {
     const action = btn.dataset.action;
 
     if (action === 'new') { startEdit(null); }
+    else if (action === 'view') { await viewEsercizio(await storage.get('esercizi', btn.dataset.id)); }
     else if (action === 'edit') { startEdit(await storage.get('esercizi', btn.dataset.id)); }
     else if (action === 'duplicate') {
       const orig = await storage.get('esercizi', btn.dataset.id);
@@ -285,6 +329,7 @@ export function render(container) {
       await eliminaEsercizio(btn.dataset.id);
       drawList();
     }
+    else if (action === 'back-view') { drawList(); }
     else if (!usingModal) { await onFormClick(e); }
   });
 

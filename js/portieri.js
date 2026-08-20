@@ -36,17 +36,16 @@ export async function eliminaPortiere(id) {
   await storage.remove('portieri', id);
 }
 
-function statoBadge(stato) {
-  const info = STATI.find((s) => s.key === stato) || STATI[0];
-  return `<span class="gk-stato-badge ${info.cls}"><i class="fa-solid ${info.icon}"></i> ${escapeHtml(info.label)}</span>`;
+function statoInfo(stato) {
+  return STATI.find((s) => s.key === stato) || STATI[0];
 }
 
-// Versione compatta per la card in elenco: solo un pallino colorato con
-// l'icona, senza testo — non deve mai contendere spazio al nome. Il testo
-// completo resta nella scheda aperta (form di modifica, già con etichette
-// per esteso).
+// Versione compatta per la riga in elenco: solo icona colorata, niente
+// testo — non deve mai contendere spazio al nome. Il testo per esteso
+// resta nella scheda aperta (vista e form di modifica). Forma coerente
+// con i tasti icona dell'app (stesso raggio), non un cerchio a sé.
 function statoDot(stato) {
-  const info = STATI.find((s) => s.key === stato) || STATI[0];
+  const info = statoInfo(stato);
   return `<span class="gk-stato-dot ${info.cls}" title="${escapeHtml(info.label)}"><i class="fa-solid ${info.icon}"></i></span>`;
 }
 
@@ -132,17 +131,32 @@ export function render(container) {
     else document.getElementById('gk-portiere-form-slot').innerHTML = '';
   }
 
-  async function storicoHtml(portiere) {
+  // Vista in sola lettura: info anagrafiche + storico qualità insieme,
+  // un solo posto invece di un tasto "storico" separato da quello di
+  // apertura — click sulla riga, fuori dai tasti azione, apre sempre
+  // questa vista (stessa logica già in uso per Sedute ed Esercizi).
+  async function viewPortiere(p) {
+    const squadraNome = squadre.find((s) => s.id === p.squadraId)?.nome;
+    const categoriaLabel = categorie.find((c) => c.key === p.categoriaKey)?.label;
+    const info = statoInfo(p.stato);
     const [{ numEventi, conteggi }, gesti, qualita] = await Promise.all([
-      storicoPortiere(portiere.id),
+      storicoPortiere(p.id),
       storage.get('customLists', 'gesti'),
       storage.get('customLists', 'qualita'),
     ]);
     const labelOf = (key) =>
       (gesti?.items || []).concat(qualita?.items || []).find((i) => i.key === key)?.label || key;
     const voci = Object.entries(conteggi).sort((a, b) => b[1] - a[1]);
-    return `
-      <div class="gk-section-head"><h2>${escapeHtml(portiere.cognome)} ${escapeHtml(portiere.nome)}</h2></div>
+
+    const html = `
+      <div class="gk-section-head"><h2>${escapeHtml(p.cognome)} ${escapeHtml(p.nome)}</h2></div>
+      <div class="gk-card">
+        <div class="gk-riepilogo-riga"><b>Squadra:</b> ${escapeHtml(squadraNome || 'Nessuna squadra')}</div>
+        <div class="gk-riepilogo-riga"><b>Categoria:</b> ${escapeHtml(categoriaLabel || 'Nessuna categoria')}</div>
+        <div class="gk-riepilogo-riga" style="margin-top:8px"><span class="gk-stato-badge ${info.cls}"><i class="fa-solid ${info.icon}"></i> ${escapeHtml(info.label)}</span></div>
+        ${p.dataNascita ? `<div class="gk-riepilogo-riga" style="margin-top:8px"><b>Nato il:</b> ${escapeHtml(p.dataNascita)}</div>` : ''}
+        ${p.note ? `<div class="gk-riepilogo-riga" style="margin-top:8px"><b>Note:</b> ${escapeHtml(p.note)}</div>` : ''}
+      </div>
       <div class="gk-card">
         <div class="gk-label"><i class="fa-solid fa-clock-rotate-left"></i>Storico qualità allenate</div>
         <div class="gk-hint" style="margin-bottom:8px">Calcolato dagli eventi svolti in cui il portiere risulta presente (${numEventi} event${numEventi === 1 ? 'o' : 'i'}). Se lo stesso esercizio compare più volte nella stessa seduta (originale + varianti), conta una sola volta.</div>
@@ -153,6 +167,11 @@ export function render(container) {
           </table>`}
       </div>
     `;
+    if (isDesktop()) {
+      openModal((target) => { target.innerHTML = html; }, { size: 'md', label: 'Dettaglio portiere' });
+    } else {
+      container.innerHTML = `<button class="gk-btn" data-action="back-view" style="margin-bottom:12px"><i class="fa-solid fa-arrow-left"></i>Elenco</button>` + html;
+    }
   }
 
   async function draw() {
@@ -167,28 +186,24 @@ export function render(container) {
         <button class="gk-btn primary" data-action="new"><i class="fa-solid fa-plus"></i>Nuovo</button>
       </div>
       <div id="gk-portiere-form-slot"></div>
-      <div class="gk-list gk-grid">
-        ${portieri.length === 0 ? `<div class="gk-empty">Nessun portiere in rosa.</div>` : ''}
-        ${portieri.map((p) => {
-          const squadraTesto = squadraNome(p.squadraId) || 'Nessuna squadra';
-          const categoriaTesto = categoriaLabel(p.categoriaKey) || 'Nessuna categoria';
-          return `
-          <div class="gk-list-item gk-portiere-card">
-            <div class="gk-portiere-row">
-              <span class="gk-portiere-name gk-truncate">${escapeHtml(p.cognome)} ${escapeHtml(p.nome)}</span>
+      ${portieri.length === 0 ? `<div class="gk-empty">Nessun portiere in rosa.</div>` : `
+        <div class="gk-rows">
+          ${portieri.map((p) => {
+            const squadraTesto = squadraNome(p.squadraId) || 'Nessuna squadra';
+            const categoriaTesto = categoriaLabel(p.categoriaKey) || 'Nessuna categoria';
+            return `
+            <div class="gk-row gk-clickable" data-action="view" data-id="${p.id}">
+              <span class="gk-row-title">${escapeHtml(p.cognome)} ${escapeHtml(p.nome)}</span>
+              <span class="gk-row-sub">${escapeHtml(squadraTesto)} - ${escapeHtml(categoriaTesto)}</span>
               ${statoDot(p.stato)}
-            </div>
-            <div class="gk-portiere-row">
-              <span class="gk-portiere-sub gk-truncate">${escapeHtml(squadraTesto)} - ${escapeHtml(categoriaTesto)}</span>
-              <div class="gk-list-actions">
-                <button class="gk-icon-btn" data-action="storico" data-id="${p.id}" title="Storico qualità"><i class="fa-solid fa-clock-rotate-left"></i></button>
+              <div class="gk-row-actions">
                 <button class="gk-icon-btn" data-action="edit" data-id="${p.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
                 <button class="gk-icon-btn danger" data-action="delete" data-id="${p.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
-          </div>
-        `; }).join('')}
-      </div>
+          `; }).join('')}
+        </div>
+      `}
     `;
   }
 
@@ -223,11 +238,10 @@ export function render(container) {
     const action = btn.dataset.action;
 
     if (action === 'new') { startEdit(null); }
+    else if (action === 'view') { await viewPortiere(await storage.get('portieri', btn.dataset.id)); }
     else if (action === 'edit') { startEdit(await storage.get('portieri', btn.dataset.id)); }
-    else if (action === 'storico') {
-      const portiere = await storage.get('portieri', btn.dataset.id);
-      openModal(async (target) => { target.innerHTML = await storicoHtml(portiere); }, { size: 'md', label: 'Storico qualità' });
-    } else if (action === 'delete') {
+    else if (action === 'back-view') { draw(); }
+    else if (action === 'delete') {
       if (!window.confirm('Eliminare questo portiere dalla rosa?')) return;
       await eliminaPortiere(btn.dataset.id);
       await draw();

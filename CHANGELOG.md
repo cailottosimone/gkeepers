@@ -1,5 +1,148 @@
 # CHANGELOG
 
+## v0.16.0 — 2026-08-20 — Colore stagione scelto, correzione ordine portiere
+
+1. **Corretto per davvero l'ordine nella card portiere**: l'ultima volta
+   avevo sistemato solo la vista aperta, non la riga in elenco — lì lo
+   stato veniva ancora prima di squadra/categoria. Ora l'ordine è coerente
+   ovunque: nome, squadra-categoria, stato, azioni.
+2. **Colore della stagione, a scelta**: alla creazione o modifica di una
+   stagione si sceglie ora anche un colore (selettore colore nativo),
+   usato — come richiesto — solo nel Calendario allenatore, al posto di
+   quello generato automaticamente. Le stagioni già esistenti senza un
+   colore scelto continuano a usare quello automatico come prima, nessuna
+   differenza per chi non tocca questo campo.
+
+### Verifiche fatte
+
+Verificato che nella riga portiere in elenco squadra-categoria preceda
+davvero il pallino di stato nel markup (non solo che siano entrambi
+presenti, controllo che mi aveva ingannato la volta scorsa). Per il
+colore: creata una stagione, scelto un colore specifico, verificato che
+venga salvato e che il chip nel Calendario allenatore lo usi esattamente
+(non un colore approssimato o quello automatico). Rieseguiti tutti e tre
+gli smoke test (mobile/desktop/sync), nessuna regressione.
+
+## v0.15.0 — 2026-08-20 — Nome stagione nel calendario, sync non invadente
+
+1. **Calendario allenatore: nome stagione scritto nel chip**, non più
+   affidato al solo colore del bordo (senza una legenda accanto, il
+   colore da solo non bastava a capire quale stagione fosse). Il nome
+   compare come riga propria, colorata con lo stesso colore del bordo per
+   rinforzare l'associazione. Celle e chip ingranditi di conseguenza (in
+   settimana e mese, desktop e mobile) per fare spazio senza affollarsi.
+2. **Il sync automatico non ti sposta più da dove sei**. Il problema:
+   ogni sync in background (all'avvio, periodico, al ritorno in primo
+   piano) ridisegnava da zero la sezione che stavi guardando — se eri su
+   Impostazioni → Dizionario, tornavi a Liste personalizzate, perché ogni
+   sezione riparte dalla propria scheda di default quando viene
+   ricreata da zero. Tolto il refresh della vista dal sync automatico: i
+   dati continuano a sincronizzarsi in background come prima, ma la
+   vista che stai guardando non viene più toccata. Li vedrai aggiornati
+   al prossimo cambio di sezione, o subito con "Sincronizza ora".
+
+### Verifiche fatte
+
+Verificato che il nome stagione compaia nel chip (non vuoto, colorato).
+Per il sync, simulato l'esatto scenario descritto: aperta la scheda
+Dizionario dentro Impostazioni, eseguito un sync completo (con lo stesso
+finto server PostgREST già usato per i test di sincronizzazione, per non
+dipendere dalla rete reale), verificato che la scheda Dizionario resti
+attiva invece di tornare a Liste personalizzate. Rieseguiti tutti e tre
+gli smoke test (mobile/desktop/sync), nessuna regressione.
+
+## v0.14.0 — 2026-08-20 — Stagione modificabile, coerenza Squadre/Stagioni, ordine vista portiere
+
+1. **Stagioni: ora modificabile**, non solo creabile ed eliminabile —
+   nome, inizio, fine e note si possono cambiare dopo la creazione (il
+   form era già pronto per farlo, mancava solo il tasto per aprirlo
+   pre-compilato).
+2. **Tasto "Nuovo" nella stessa posizione** tra Squadre e Stagioni: prima
+   in Squadre stava in alto a destra nel section-head, in Stagioni sotto
+   su una riga a sé (per far posto al tasto Indietro). Ora "Nuova
+   stagione" occupa lo stesso slot di "Nuova squadra", con Indietro
+   accanto anziché al posto suo.
+3. **Vista portiere: Squadra e Categoria prima dello Stato**, non più
+   dopo.
+
+### Verifiche fatte
+
+Aggiunti test specifici: il tasto "Nuovo" verificato nella stessa
+posizione strutturale in entrambe le schermate; la modifica di una
+stagione verificata sia per il campo aggiornato sia per il fatto che non
+crei un duplicato; l'ordine dei campi nella vista portiere verificato per
+posizione nel markup, non solo per presenza. Rieseguiti tutti e tre gli
+smoke test (mobile/desktop/sync), nessuna regressione.
+
+## v0.13.0 — 2026-08-20 — Tabelle al posto delle card, drawer mobile, bug ID
+
+Riscrittura sostanziale della presentazione degli elenchi, dopo due giri
+di correzioni sulle card che non convincevano.
+
+### Bug corretti
+
+1. **La migrazione degli ID non funzionava per tutti i record vecchi**: il
+   controllo era "se manca il numero, assegnane uno" — ma un vecchio
+   `numero: 1` è truthy, veniva scambiato per "già a posto" e restava nel
+   vecchio formato incrementale. Corretto: ora la migrazione verifica che
+   il codice sia nel formato giusto (`XX-#####`), non solo che esista.
+2. **Prefisso seduta cambiato da `SE` a `SD`**: si confondeva a colpo
+   d'occhio con `ES` (esercizio).
+
+### Tabelle al posto delle card
+
+Esercizi, Sedute, Portieri, Squadre, Stagioni, ed elenco eventi nel
+calendario: tutti convertiti da griglie di card a righe tabellari (un
+unico contenitore con bordo, righe separate da una linea sottile) — più
+leggibile, più compatto, niente più titoli schiacciati da poco spazio.
+L'ID (dove c'è) è stato spostato a destra con meno peso visivo, non più a
+fianco del titolo a competere con lui.
+
+### Click sulla riga apre la vista, ovunque abbia senso
+
+- **Esercizi**: prima non esisteva una vista in sola lettura, solo
+  modifica — aggiunta (sequenza, note, materiali, tag, schema).
+- **Portieri**: il tasto "storico" separato è sparito. Ora una sola vista
+  unisce le informazioni anagrafiche (squadra, categoria, note) e lo
+  storico qualità allenate, aperta cliccando la riga.
+- **Sedute**: già presente dal giro precedente, confermata.
+- **Squadre e Stagioni**: qui il click continua a *navigare* (apre le
+  stagioni di una squadra, gli eventi di una stagione) invece di aprire un
+  modale — è una scelta deliberata: trasformarlo in un modale avrebbe
+  aggiunto un passaggio inutile a un'azione che è già "vedere cosa c'è
+  dentro". I tasti azione (elimina) restano comunque specifici e hanno
+  sempre la priorità sul click della riga.
+
+In tutti i casi, i tasti azione specifici (modifica, duplica, elimina)
+hanno sempre la priorità sul click della riga — stessa logica di delega
+degli eventi già in uso, nessun codice nuovo per gestire il conflitto.
+
+### Portiere: pallino di stato coerente con lo stile dei tasti
+
+Non più una forma a pillola arrotondata: stesso raggio dei tasti icona
+usati in tutta la app.
+
+### Nav mobile: drawer a hamburger, non più barra in basso
+
+La barra in basso (con "Altro" per le sezioni meno usate) è stata
+sostituita da un drawer laterale a scomparsa, aperto da un bottone
+hamburger nell'intestazione. Tutte le sezioni sono mostrate direttamente
+nel drawer, nessuna raggruppata: con lo spazio verticale di un drawer non
+serve più nascondere nulla dietro un tap in più.
+
+### Verifiche fatte
+
+Riscritto buona parte dello smoke test mobile per riflettere la nuova
+struttura (righe tabellari al posto di card, drawer al posto di
+bottom bar/"Altro", tasto "indietro" della vista distinto da quello del
+form). In questo giro di correzioni ho anche trovato un piccolo bug reale
+nel mio codice: il tasto "indietro" della vista in sola lettura e quello
+del form di modifica condividevano lo stesso `data-action="back"`,
+causando un conflitto nella logica di gestione click su mobile — corretto
+rinominando quello della vista in `back-view`, sia per Esercizi che per
+Sedute. Rieseguiti anche gli smoke test desktop e sync, nessuna
+regressione.
+
 ## v0.12.0 — 2026-08-20 — Card riviste da zero, ID non incrementali
 
 1. **Card Esercizi**: tolta del tutto la sequenza di step, tornata a una

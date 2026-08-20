@@ -147,14 +147,18 @@ export async function importAll(backup) {
   });
 }
 
-// Migrazione non distruttiva: assegna un codice a chi ancora non ce l'ha
-// (record creati prima che esistesse questa funzionalità). Sicura da
-// richiamare ad ogni avvio: tocca solo chi ha "numero" mancante.
+// Migrazione non distruttiva: assegna un codice nel formato corretto a chi
+// non ce l'ha (record creati prima di questa funzionalità) O a chi ha
+// ancora il vecchio formato numerico incrementale (#1, #2...) — un
+// controllo di sola verità ("if (!item.numero)") non bastava: un vecchio
+// "numero: 1" è truthy, veniva scambiato per "già a posto". Sicura da
+// richiamare ad ogni avvio: tocca solo chi non è già nel formato giusto.
+const CODICE_VALIDO = /^[A-Z]{2}-\d{5}$/;
 export async function ensureCodes() {
-  for (const [storeName, prefix] of [['esercizi', 'ES'], ['sedute', 'SE']]) {
+  for (const [storeName, prefix] of [['esercizi', 'ES'], ['sedute', 'SD']]) {
     const items = await getAll(storeName, { includeDeleted: true });
     for (const item of items) {
-      if (!item.numero) {
+      if (typeof item.numero !== 'string' || !CODICE_VALIDO.test(item.numero)) {
         item.numero = await generateCode(storeName, prefix);
         await put(storeName, item);
       }

@@ -10,7 +10,12 @@ async function tentaSyncAutomatico() {
   if (!(await sync.isSyncEnabled())) return;
   try {
     await sync.syncAll();
-    ui.refreshIfSafe();
+    // Niente refresh della vista qui, di proposito: un modulo ricreato da
+    // zero perde lo stato interno che non passa dallo storage (es. quale
+    // scheda di Impostazioni è aperta) — un sync silenzioso in background
+    // non deve mai spostarti da dove sei. I dati nuovi si vedono al
+    // prossimo cambio di sezione (ogni render() legge sempre dallo
+    // storage), o subito se premi "Sincronizza ora".
   } catch (err) {
     // Silenzioso di proposito: un tentativo automatico che fallisce (rete
     // assente, per esempio) non deve interrompere né avvisare — "Sincronizza
@@ -24,12 +29,10 @@ async function main() {
   await storage.ensureCodes();
   ui.init();
 
-  // Aggiornamento automatico: non solo su "Sincronizza ora" — un tentativo
-  // silenzioso all'avvio, uno periodico mentre la app resta aperta, e uno
-  // quando torna in primo piano (cambio scheda/app, riapertura). La vista
-  // corrente si aggiorna da sola quando arrivano dati nuovi, a meno che tu
-  // non sia in quel momento a scrivere in un campo o con un modale aperto
-  // (in quel caso non tocca nulla, per non farti perdere una modifica).
+  // Sincronizzazione automatica in background — non solo su "Sincronizza
+  // ora": un tentativo silenzioso all'avvio, uno periodico mentre la app
+  // resta aperta, e uno quando torna in primo piano (cambio scheda/app).
+  // Aggiorna i dati, mai la vista che stai guardando in quel momento.
   tentaSyncAutomatico();
   setInterval(tentaSyncAutomatico, AUTO_SYNC_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {

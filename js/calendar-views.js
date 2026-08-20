@@ -34,8 +34,14 @@ export function eventoChipHtml(e, opts = {}) {
   const label = e.tipo === 'partita'
     ? `<i class="fa-solid fa-futbol"></i> ${squadra}${orario}vs ${escapeHtml(e.partita?.avversario || '?')}`
     : `<i class="fa-solid fa-dumbbell"></i> ${squadra}${orario}Allenamento`;
-  const colorStyle = opts.colorBySeason && e.stagioneId ? ` style="border-left-color:${colorForId(e.stagioneId)}"` : '';
-  return `<div class="gk-evt-chip ${e.tipo} ${e.svolto ? 'svolto' : ''}" data-action="open-evento" data-id="${e.id}"${colorStyle}>${label}</div>`;
+  const colore = opts.colorBySeason && e.stagioneId ? (e.stagioneColore || colorForId(e.stagioneId)) : null;
+  const colorStyle = colore ? ` style="border-left-color:${colore}"` : '';
+  // Il nome della stagione è scritto per esteso nel chip, non affidato al
+  // solo colore del bordo — senza una legenda a fianco il colore da solo
+  // non basterebbe a capire quale stagione sia.
+  const stagioneRiga = opts.colorBySeason && e.stagioneNome
+    ? `<div class="gk-evt-chip-stagione" style="color:${colore}">${escapeHtml(e.stagioneNome)}</div>` : '';
+  return `<div class="gk-evt-chip ${e.tipo} ${e.svolto ? 'svolto' : ''}" data-action="open-evento" data-id="${e.id}"${colorStyle}>${stagioneRiga}${label}</div>`;
 }
 
 function dayCellEvents(dayEventi, iso, opts) {
@@ -135,16 +141,14 @@ export function calendarHtml(eventi, calRef, todayISO, opts = {}) {
 
 export function elencoHtml(eventi, opts = {}) {
   if (eventi.length === 0) return '<div class="gk-empty">Nessun evento.</div>';
-  return `<div class="gk-list" style="margin-top:4px">
+  return `<div class="gk-rows" style="margin-top:4px">
     ${eventi.map((e) => `
-      <div class="gk-list-item" data-action="open-evento" data-id="${e.id}" style="cursor:pointer">
-        <div>
-          <div class="gk-list-title">${fmtDate(e.data)}${e.ora ? ' · ' + e.ora : ''} — ${e.tipo === 'partita' ? 'Partita' : 'Allenamento'}</div>
-          <div class="gk-list-sub">${opts.showSquadra ? escapeHtml(e.squadraNome || '') + ' · ' : ''}${eventoSubtitle(e)}</div>
-        </div>
-        <div class="gk-list-actions">
+      <div class="gk-row gk-clickable" data-action="open-evento" data-id="${e.id}">
+        <span class="gk-row-title">${fmtDate(e.data)}${e.ora ? ' · ' + e.ora : ''} — ${e.tipo === 'partita' ? 'Partita' : 'Allenamento'}</span>
+        <span class="gk-row-sub">${opts.showSquadra ? escapeHtml(e.squadraNome || '') + ' · ' : ''}${eventoSubtitle(e)}</span>
+        <div class="gk-row-actions">
           ${e.svolto ? '<span class="gk-badge">svolto</span>' : ''}
-          ${opts.showDelete !== false ? `<button class="gk-icon-btn danger" data-action="delete-evento" data-id="${e.id}"><i class="fa-solid fa-trash"></i></button>` : ''}
+          ${opts.showDelete !== false ? `<button class="gk-icon-btn danger" data-action="delete-evento" data-id="${e.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>` : ''}
         </div>
       </div>
     `).join('')}

@@ -1,12 +1,10 @@
 // ui.js
-// Guscio dell'app: barra di navigazione (sidebar su desktop, bottom bar su
-// mobile — vedi css) + contenitore. Ogni sezione è un modulo indipendente
-// con il proprio render(container).
-//
-// Su mobile la bottom bar mostra solo le sezioni più usate: le altre
-// (Stagioni, Impostazioni) finiscono sotto "Altro", altrimenti con 6 voci
-// diventa tutto troppo piccolo per un pollice. Su desktop la sidebar le
-// mostra tutte, c'è spazio.
+// Guscio dell'app: barra di navigazione laterale, sempre visibile su
+// desktop; su mobile è un drawer a scomparsa, aperto/chiuso dal bottone
+// hamburger nell'header — non più una bottom bar (con 6 sezioni diventava
+// tutto troppo piccolo per un pollice, e "Altro" era comunque un tap in
+// più per due sezioni). Il drawer mostra tutte le sezioni direttamente,
+// senza bisogno di raggrupparne alcuna.
 
 import * as esercizi from './esercizi.js';
 import * as sedute from './sedute.js';
@@ -14,63 +12,57 @@ import * as stagioni from './stagioni.js';
 import * as calendario from './calendario.js';
 import * as portieri from './portieri.js';
 import * as settings from './settings.js';
-import { openModal, closeModal } from './modal.js';
 
 const SECTIONS = [
   { key: 'esercizi', label: 'Esercizi', icon: 'fa-list-check', mod: esercizi },
   { key: 'sedute', label: 'Sedute', icon: 'fa-clipboard-list', mod: sedute },
-  { key: 'stagioni', label: 'Stagioni', icon: 'fa-users-rectangle', mod: stagioni, foldMobile: true },
+  { key: 'stagioni', label: 'Stagioni', icon: 'fa-users-rectangle', mod: stagioni },
   { key: 'calendario', label: 'Calendario', icon: 'fa-calendar-check', mod: calendario },
   { key: 'portieri', label: 'Portieri', icon: 'fa-user-group', mod: portieri },
-  { key: 'settings', label: 'Impostazioni', icon: 'fa-gear', mod: settings, foldMobile: true },
+  { key: 'settings', label: 'Impostazioni', icon: 'fa-gear', mod: settings },
 ];
 
 let currentKey = null;
 let navEl = null;
 let contentEl = null;
+let hamburgerEl = null;
+let backdropEl = null;
 
 export function init() {
   navEl = document.getElementById('gk-nav');
   contentEl = document.getElementById('gk-content');
+  hamburgerEl = document.getElementById('gk-hamburger');
+  backdropEl = document.getElementById('gk-drawer-backdrop');
 
   navEl.innerHTML = `
     <div class="gk-nav-title"><i class="fa-solid fa-shield-halved"></i> GKEEPERS</div>
   ` + SECTIONS.map((s) => `
-    <button class="gk-nav-btn" data-key="${s.key}" ${s.foldMobile ? 'data-fold="mobile"' : ''}>
-      <i class="fa-solid ${s.icon}"></i><span>${s.label}</span>
-    </button>
-  `).join('') + `
-    <button class="gk-nav-btn gk-nav-more-btn" data-key="__more"><i class="fa-solid fa-ellipsis"></i><span>Altro</span></button>
-  `;
+    <button class="gk-nav-btn" data-key="${s.key}"><i class="fa-solid ${s.icon}"></i><span>${s.label}</span></button>
+  `).join('');
 
   navEl.addEventListener('click', (e) => {
     const btn = e.target.closest('.gk-nav-btn');
     if (!btn) return;
-    if (btn.dataset.key === '__more') openMorePopup();
-    else activate(btn.dataset.key);
+    activate(btn.dataset.key);
+    closeDrawer();
   });
+
+  hamburgerEl?.addEventListener('click', toggleDrawer);
+  backdropEl?.addEventListener('click', closeDrawer);
 
   activate('esercizi');
 }
 
-function openMorePopup() {
-  const folded = SECTIONS.filter((s) => s.foldMobile);
-  openModal((target) => {
-    target.innerHTML = `
-      <div class="gk-modal-title">Altro</div>
-      <div class="gk-opt-list">
-        ${folded.map((s) => `
-          <div class="gk-opt-row" data-key="${s.key}"><i class="fa-solid ${s.icon}"></i><span class="gk-opt-label">${s.label}</span></div>
-        `).join('')}
-      </div>
-    `;
-    target.addEventListener('click', (e) => {
-      const row = e.target.closest('[data-key]');
-      if (!row) return;
-      closeModal();
-      activate(row.dataset.key);
-    });
-  }, { size: 'md', label: 'Altre sezioni' });
+function openDrawer() {
+  navEl.classList.add('open');
+  backdropEl?.classList.add('open');
+}
+function closeDrawer() {
+  navEl.classList.remove('open');
+  backdropEl?.classList.remove('open');
+}
+function toggleDrawer() {
+  navEl.classList.contains('open') ? closeDrawer() : openDrawer();
 }
 
 function activate(key) {

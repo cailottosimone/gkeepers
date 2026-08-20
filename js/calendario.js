@@ -19,6 +19,7 @@ async function eventiConContesto() {
   return eventi.map((e) => ({
     ...e,
     stagioneNome: stagioniById[e.stagioneId]?.nome || '—',
+    stagioneColore: stagioniById[e.stagioneId]?.colore || null,
     squadraNome: squadreById[e.squadraId]?.nome || '—',
   }));
 }

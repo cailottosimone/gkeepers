@@ -12,6 +12,19 @@ import { weekHtml, calendarHtml, elencoHtml, dayPopupHtml, wireDragDrop, GIORNI,
 import { emptyEvento, mountEventoForm } from './evento-editor.js';
 import { openModal, closeModal, isDesktop } from './modal.js';
 
+// Colore di partenza per una nuova stagione: una tinta casuale, in
+// esadecimale (l'input color non accetta hsl). Solo un punto di partenza
+// comodo — l'allenatore può sempre scegliere un colore diverso.
+function defaultStagioneColor() {
+  const h = Math.floor(Math.random() * 360);
+  const s = 0.62, l = 0.45;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (x) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
 // Nella settimana/calendario di UNA stagione: al massimo 2 eventi visibili
 // per giorno, poi "+N" apre il popup — evita che la riga si allunghi.
 const CAP_GIORNO = 2;
@@ -46,18 +59,18 @@ export function render(container) {
     container.innerHTML = `
       <div class="gk-section-head"><h2>Squadre</h2><button class="gk-btn primary" data-action="new-squadra"><i class="fa-solid fa-plus"></i>Nuova squadra</button></div>
       <div id="gk-squadra-form-slot"></div>
-      <div class="gk-list">
-        ${squadre.length === 0 ? '<div class="gk-empty">Nessuna squadra. Creane una per iniziare a pianificare le stagioni.</div>' : ''}
-        ${squadre.map((s) => `
-          <div class="gk-list-item">
-            <div class="gk-list-title" data-action="open-squadra" data-id="${s.id}" style="cursor:pointer;flex:1">${escapeHtml(s.nome)}</div>
-            <div class="gk-list-actions">
-              <button class="gk-icon-btn" data-action="open-squadra" data-id="${s.id}"><i class="fa-solid fa-arrow-right"></i></button>
-              <button class="gk-icon-btn danger" data-action="delete-squadra" data-id="${s.id}"><i class="fa-solid fa-trash"></i></button>
+      ${squadre.length === 0 ? '<div class="gk-empty">Nessuna squadra. Creane una per iniziare a pianificare le stagioni.</div>' : `
+        <div class="gk-rows">
+          ${squadre.map((s) => `
+            <div class="gk-row gk-clickable" data-action="open-squadra" data-id="${s.id}">
+              <span class="gk-row-title">${escapeHtml(s.nome)}</span>
+              <div class="gk-row-actions">
+                <button class="gk-icon-btn danger" data-action="delete-squadra" data-id="${s.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+              </div>
             </div>
-          </div>
-        `).join('')}
-      </div>
+          `).join('')}
+        </div>
+      `}
     `;
   }
 
@@ -67,24 +80,25 @@ export function render(container) {
     container.innerHTML = `
       <div class="gk-section-head">
         <h2><i class="fa-solid fa-users"></i> ${escapeHtml(squadraCorrente.nome)}</h2>
-        <button class="gk-btn" data-action="back-squadre"><i class="fa-solid fa-arrow-left"></i>Squadre</button>
+        <div class="gk-row-btns">
+          <button class="gk-btn" data-action="back-squadre"><i class="fa-solid fa-arrow-left"></i>Squadre</button>
+          <button class="gk-btn primary" data-action="new-stagione"><i class="fa-solid fa-plus"></i>Nuova stagione</button>
+        </div>
       </div>
-      <button class="gk-btn primary" data-action="new-stagione"><i class="fa-solid fa-plus"></i>Nuova stagione</button>
-      <div class="gk-list" style="margin-top:12px">
-        ${stagioni.length === 0 ? '<div class="gk-empty">Nessuna stagione per questa squadra.</div>' : ''}
-        ${stagioni.map((s) => `
-          <div class="gk-list-item">
-            <div style="cursor:pointer;flex:1" data-action="open-stagione" data-id="${s.id}">
-              <div class="gk-list-title">${escapeHtml(s.nome)}</div>
-              <div class="gk-list-sub">${fmtDate(s.dataInizio)} → ${fmtDate(s.dataFine)}</div>
+      ${stagioni.length === 0 ? '<div class="gk-empty" style="margin-top:12px">Nessuna stagione per questa squadra.</div>' : `
+        <div class="gk-rows" style="margin-top:12px">
+          ${stagioni.map((s) => `
+            <div class="gk-row gk-clickable" data-action="open-stagione" data-id="${s.id}">
+              <span class="gk-row-title">${escapeHtml(s.nome)}</span>
+              <span class="gk-row-sub">${fmtDate(s.dataInizio)} → ${fmtDate(s.dataFine)}</span>
+              <div class="gk-row-actions">
+                <button class="gk-icon-btn" data-action="edit-stagione" data-id="${s.id}" title="Modifica"><i class="fa-solid fa-pen"></i></button>
+                <button class="gk-icon-btn danger" data-action="delete-stagione" data-id="${s.id}" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+              </div>
             </div>
-            <div class="gk-list-actions">
-              <button class="gk-icon-btn" data-action="open-stagione" data-id="${s.id}"><i class="fa-solid fa-arrow-right"></i></button>
-              <button class="gk-icon-btn danger" data-action="delete-stagione" data-id="${s.id}"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
+          `).join('')}
+        </div>
+      `}
       <div id="gk-stagione-form-slot"></div>
     `;
   }
@@ -95,6 +109,10 @@ export function render(container) {
         <div class="gk-field"><label>Nome stagione</label><input class="gk-input" id="fs-nome" value="${escapeHtml(s.nome || '')}" placeholder="Es. Stagione 2026/27" /></div>
         <div class="gk-field"><label>Inizio</label><input class="gk-input" type="date" id="fs-inizio" value="${s.dataInizio || ''}" /></div>
         <div class="gk-field"><label>Fine</label><input class="gk-input" type="date" id="fs-fine" value="${s.dataFine || ''}" /></div>
+        <div class="gk-field">
+          <label>Colore <span class="gk-hint">(usato solo nel Calendario allenatore, per distinguerla dalle altre stagioni)</span></label>
+          <input class="gk-color-input" type="color" id="fs-colore" value="${s.colore || defaultStagioneColor()}" />
+        </div>
         <div class="gk-field"><label>Note</label><textarea class="gk-input" id="fs-note" rows="2">${escapeHtml(s.note || '')}</textarea></div>
         <div class="gk-form-actions">
           <button class="gk-btn" data-action="cancel-stagione">Annulla</button>
@@ -258,6 +276,10 @@ export function render(container) {
       stagioneDraft = { squadraId: squadraCorrente.id };
       document.getElementById('gk-stagione-form-slot').innerHTML = stagioneFormHtml();
     }
+    else if (action === 'edit-stagione') {
+      stagioneDraft = await storage.get('stagioni', btn.dataset.id);
+      document.getElementById('gk-stagione-form-slot').innerHTML = stagioneFormHtml(stagioneDraft);
+    }
     else if (action === 'cancel-stagione') { document.getElementById('gk-stagione-form-slot').innerHTML = ''; }
     else if (action === 'save-stagione') {
       const nome = document.getElementById('fs-nome').value.trim();
@@ -266,6 +288,7 @@ export function render(container) {
         id: stagioneDraft.id || storage.uid(), squadraId: squadraCorrente.id, nome,
         dataInizio: document.getElementById('fs-inizio').value,
         dataFine: document.getElementById('fs-fine').value,
+        colore: document.getElementById('fs-colore').value,
         note: document.getElementById('fs-note').value,
         createdAt: stagioneDraft.createdAt || storage.now(), updatedAt: storage.now(),
       });
