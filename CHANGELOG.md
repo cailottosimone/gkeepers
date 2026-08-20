@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## v0.17.1 — 2026-08-20 — Correzione: vista Mese, solo mobile
+
+La v0.17.0 aveva rimosso la vista Mese ovunque, anche su desktop — non
+era quello che era stato chiesto ("su mobile", esplicitamente). Corretto:
+la vista Mese è di nuovo disponibile su desktop, nascosta solo sotto gli
+859px di larghezza (stessa soglia già usata per il resto del
+comportamento responsive dell'app). Non è stata rimossa dal markup — è
+sempre presente, semplicemente non visibile su schermi stretti — così
+resta raggiungibile ovunque ci sia spazio per gestirla bene.
+
+### Verifiche fatte
+
+Corretti i test che avevano validato (erroneamente) la rimozione totale:
+ora lo smoke test mobile verifica che il tab esista nel markup con la
+classe che lo nasconde sotto la soglia mobile (e che quella regola CSS
+esista davvero — jsdom non calcola il layout reale, quindi la verifica è
+sulla regola stessa, non su un rendering visivo), mentre lo smoke test
+desktop verifica che il tab sia cliccabile e la vista Mese funzioni
+davvero lì. Rieseguiti tutti e tre gli smoke test, nessuna regressione.
+
+## v0.17.0 — 2026-08-20 — Vista Mese rimossa, allineamento quantità materiali
+
+1. **Vista Mese rimossa** da entrambi i calendari (Stagioni e Calendario
+   allenatore): troppo affollata con le card degli eventi dentro celle
+   già piccole, specialmente su mobile. Restano Settimana ed Elenco.
+2. **Allineamento del campo quantità materiali corretto**. La causa: ogni
+   campo con la classe base `.gk-input` eredita un `margin-bottom: 10px`,
+   pensato per campi impilati uno sopra l'altro in un form — ma il campo
+   quantità vive dentro una riga ORIZZONTALE insieme a icona, etichetta e
+   tasto elimina, e quel margine asimmetrico (solo sotto, non sopra) lo
+   spingeva fuori asse rispetto agli altri elementi della riga. La classe
+   `.gk-inline-input` esisteva già in tre punti del codice proprio per
+   segnalare "questo campo è dentro una riga, non impilato" — ma non
+   aveva mai avuto una regola propria che facesse davvero qualcosa.
+   Aggiunta: azzera il margine verticale quando un campo è in riga.
+   Corregge lo stesso problema anche negli altri due punti che usavano
+   già questa classe (rinomina voce di lista in Impostazioni, tipo per
+   giorno nella ricorrenza), anche se non esplicitamente segnalati.
+
+### Verifiche fatte
+
+Verificato che la vista Mese sia assente in entrambi i calendari (tab non
+più cliccabile in nessuno dei due). Per l'allineamento: dato che jsdom
+non calcola un layout reale (non posso "vedere" un disallineamento
+pixel-per-pixel da qui), ho verificato sia che il campo interessato abbia
+la classe corretta sia che la regola CSS `.gk-inline-input` contenga
+davvero `margin-bottom: 0` — la combinazione dei due controlli è la
+prova più vicina possibile, in questo ambiente, che il fix sia applicato
+e funzioni. Rieseguiti tutti e tre gli smoke test (mobile/desktop/sync),
+nessuna regressione.
+
 ## v0.16.0 — 2026-08-20 — Colore stagione scelto, correzione ordine portiere
 
 1. **Corretto per davvero l'ordine nella card portiere**: l'ultima volta

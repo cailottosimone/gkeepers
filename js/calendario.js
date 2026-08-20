@@ -1,7 +1,9 @@
 // calendario.js
 // "Calendario Allenatore": stesse viste (Settimana/Calendario/Elenco) di
 // Stagioni, ma qui gli eventi vengono da TUTTE le stagioni e squadre
-// insieme — un unico sguardo d'insieme sull'attività pianificata. Apre lo
+// insieme — un unico sguardo d'insieme sull'attività pianificata. La
+// vista Mese è nascosta su mobile (celle troppo piccole per più card
+// evento), resta disponibile su desktop dove lo spazio non manca. Apre lo
 // stesso form evento (evento-editor.js) di Stagioni; salvando si torna qui.
 
 import * as storage from './storage.js';
@@ -37,7 +39,7 @@ export function render(container) {
       <div class="gk-hint" style="margin-bottom:10px">Tutte le attività pianificate, di tutte le squadre e stagioni insieme.</div>
       <div class="gk-view-switch">
         <button class="gk-tab ${view === 'settimana' ? 'active' : ''}" data-action="view-settimana"><i class="fa-solid fa-calendar-week"></i> Settimana</button>
-        <button class="gk-tab ${view === 'calendario' ? 'active' : ''}" data-action="view-calendario"><i class="fa-solid fa-calendar-days"></i> Calendario</button>
+        <button class="gk-tab gk-desktop-only ${view === 'calendario' ? 'active' : ''}" data-action="view-calendario"><i class="fa-solid fa-calendar-days"></i> Calendario</button>
         <button class="gk-tab ${view === 'elenco' ? 'active' : ''}" data-action="view-elenco"><i class="fa-solid fa-list"></i> Elenco</button>
       </div>
       <div id="gk-cal-view"></div>

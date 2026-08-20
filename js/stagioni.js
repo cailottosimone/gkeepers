@@ -138,7 +138,7 @@ export function render(container) {
       <div id="gk-ricorrenza-slot"></div>
       <div class="gk-view-switch">
         <button class="gk-tab ${eventiView === 'settimana' ? 'active' : ''}" data-action="view-settimana"><i class="fa-solid fa-calendar-week"></i> Settimana</button>
-        <button class="gk-tab ${eventiView === 'calendario' ? 'active' : ''}" data-action="view-calendario"><i class="fa-solid fa-calendar-days"></i> Calendario</button>
+        <button class="gk-tab gk-desktop-only ${eventiView === 'calendario' ? 'active' : ''}" data-action="view-calendario"><i class="fa-solid fa-calendar-days"></i> Calendario</button>
         <button class="gk-tab ${eventiView === 'elenco' ? 'active' : ''}" data-action="view-elenco"><i class="fa-solid fa-list"></i> Elenco</button>
       </div>
       <div id="gk-eventi-view"></div>

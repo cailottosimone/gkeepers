@@ -81,6 +81,7 @@ body {
   outline: none; margin-bottom: 10px;
 }
 .gk-input:focus { border-color: var(--amber-dim); background: var(--panel); }
+.gk-inline-input { width: auto; margin-bottom: 0; } /* dentro una riga orizzontale: niente margine verticale da campo impilato */
 .gk-title-input { font-family: 'Oswald', sans-serif; font-size: 19px; font-weight: 600; padding: 12px 14px; }
 textarea.gk-input { resize: vertical; min-height: 40px; }
 .gk-color-input { width: 56px; height: 38px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--panel); }
@@ -327,6 +328,7 @@ table.gk-table input[type="checkbox"] { accent-color: var(--amber-solid); width:
 
 /* ---------- mobile: nav in basso, non a sinistra ---------- */
 @media (max-width: 859px) {
+  .gk-desktop-only { display: none !important; } /* vista Mese: celle troppo piccole per le card evento su schermi stretti */
   .gk-shell { flex-direction: column; }
   .gk-nav {
     position: fixed; top: 0; left: 0; bottom: 0; width: 250px; z-index: 50;
